@@ -9,23 +9,32 @@ verification in simulation, and then to hardware.
 | 1 | Train a 2-4-1 XOR MLP in Python, quantize to Q8.8 | done |
 | 2 | Export weights (.mif for Quartus, .hex for simulation), build a pipelined MAC unit | done |
 | 3 | Self-checking testbench, verified against a bit-exact Python model | done, 455/455 pass |
-| 4 | Full forward pass: weight ROM, neuron sequencer, ReLU | next |
-| 5 | Run on DE2-115: switches in, LEDs / 7-segment out | |
+| 4 | Full forward pass: .mif-initialized weight ROM, FSM sequencer, ReLU, board top level | done, 32/32 + board test pass |
+| 5 | Program the DE2-115 and verify XOR on LEDs / 7-segment | ready to try |
 
 ## Layout
 
 ```
 python/fixedpoint.py       bit-exact fixed-point model (the golden reference)
 python/train_xor.py        train, quantize, check quantized accuracy, export weights
-python/gen_mac_vectors.py  generate stimulus + expected results for the testbench
+python/gen_mac_vectors.py  generate stimulus + expected results for the MAC testbench
+python/gen_nn_vectors.py   expected hidden/logit/class for the forward-pass testbench
 weights/xor_weights.mif    Quartus memory init file (17 x 16-bit words)
 weights/xor_weights.hex    same contents for $readmemh
 rtl/mac.v                  parameterized 2-stage pipelined multiply-accumulate unit
-tb/tb_mac.v                self-checking testbench
+rtl/weight_rom.v           M9K ROM, initialized from the .mif in Quartus (.hex in simulation)
+rtl/nn_core.v              2-layer MLP forward pass: FSM + ROM + one MAC
+rtl/hex7seg.v              7-segment decoder
+rtl/de2_115_top.v          board top level: switches in, LEDs + 7-segment out
+tb/tb_mac.v                self-checking MAC testbench
+tb/tb_nn_core.v            self-checking forward-pass testbench
+tb/tb_top.v                board-level test (switches -> LEDs / HEX digits)
 tb/vectors/                generated stimulus / expected results
-sim/run_modelsim.do        ModelSim script
-sim/run_iverilog.sh        Icarus Verilog script (open-source alternative)
-quartus/                   timing constraint + virtual-pin script for a standalone fit
+sim/run_modelsim.do        ModelSim script (takes the testbench name)
+sim/run_iverilog.sh        runs all testbenches with Icarus Verilog
+quartus/de2_115_top.*      ready-made Quartus project for the board (device, files, pins, timing)
+quartus/mac.sdc, mac_virtual_pins.tcl   for fitting the MAC on its own
+.github/workflows/sim.yml  CI: regenerates vectors and runs every testbench on each push
 ```
 
 ## Fixed-point format: Q8.8
@@ -134,8 +143,10 @@ on every `out_done` and also checks that the number of results is correct.
 In the ModelSim transcript window:
 
 ```
-cd C:/path/to/de2-115-accel/sim
-do run_modelsim.do
+cd C:/path/to/de2-115-nn-accelerator/sim
+do run_modelsim.do                 # MAC unit
+do run_modelsim.do tb_nn_core      # full forward pass (FSM, ROM, MAC in the wave window)
+do run_modelsim.do tb_top          # board top level
 ```
 
 It compiles, loads the waveform, runs, and should print:
@@ -150,8 +161,11 @@ wave window. Try zooming in on an XOR neuron and reading `result` in decimal: 25
 ### Icarus Verilog (optional, no license)
 
 ```
-sh sim/run_iverilog.sh
+sh sim/run_iverilog.sh      # runs all three testbenches
 ```
+
+GitHub Actions runs the same script on every push. It also regenerates the test vectors from the
+committed weights and fails if they drift.
 
 ### Is the testbench actually checking anything?
 
@@ -165,7 +179,107 @@ failed every time:
 | accumulator ignores `in_valid` | 90 / 455 |
 | saturation disabled (wraps on overflow) | 73 / 455 |
 
-## Bringing it into Quartus (DE2-115)
+## Step 4: full forward pass (`rtl/nn_core.v`)
+
+```
+          +-----------+  weight   +-------+  result  +---------------------+
+ addr --> | weight_rom|---------->|       |--------->| ReLU -> hidden[0:3] |---+
+  ^       | (M9K,.mif)|           |  MAC  |          | logit[0]            |   |
+  |       +-----------+  act      |       |          +---------------------+   |
+ FSM ------------------------->   +-------+                                    |
+ (layer, neuron, k)   x[i] / hidden[j] / 1.0 (bias)  <-------------------------+
+```
+
+A single MAC is shared by every neuron. The FSM walks the weight memory in the same order as the
+memory map above. It streams one (weight, activation) pair per clock, puts neurons back to back,
+and makes the bias the last term of each neuron. The ROM has one cycle of read latency, so the
+activation and control bits are registered once to stay aligned with the weight. Results come
+out of the MAC in the order they were issued. ReLU is applied as each hidden result is captured.
+The output layer starts once all four hidden activations are back.
+
+- **Latency:** 17 MAC terms, 27 clocks from `start` to `done`, which is 0.54 µs at 50 MHz. The
+  pipeline drains once between layers.
+- **Resources:** one 18x18 multiplier, one M9K block, and a few hundred LEs. Quartus reports the
+  exact numbers.
+- **Scales to MNIST:** `N_IN`, `N_HID` and `N_OUT` are parameters. With `N_OUT > 1`, `pred`
+  becomes the argmax of the logits.
+
+**Weight loading.** `weight_rom.v` has the attribute
+`(* ram_init_file = "../weights/xor_weights.mif" *)`, so Quartus bakes the .mif into the M9K
+block in the .sof. Simulation loads the matching .hex with `$readmemh`, and that part is inside
+`translate_off` so it never reaches synthesis. You can change the weights without recompiling:
+edit the .mif, then run **Processing > Update Memory Initialization File** and
+**Assembler**.
+
+**Verification.** `python/gen_nn_vectors.py` reads the weights back from `xor_weights.hex`,
+which is exactly what the ROM holds. It computes the expected hidden activations, logit and class
+for the 4 XOR inputs plus 28 random real-valued inputs, which exercise ReLU clamping. The
+testbench checks all of them bit for bit:
+
+```
+x=(0,0)  logit=-6.167969  pred=0  (27 cycles)
+x=(0,1)  logit=8.113281  pred=1  (27 cycles)
+x=(1,0)  logit=8.113281  pred=1  (27 cycles)
+x=(1,1)  logit=-8.480469  pred=0  (27 cycles)
+TEST PASSED: 32 inferences matched the Python model, 27 cycles each
+```
+
+Mutation check: removing ReLU, reading the wrong bias address, or feeding 0 instead of 1.0 for the
+bias each causes 80+ failures.
+
+## Step 5: on the board
+
+`rtl/de2_115_top.v` wires the core to the board. The core runs inference continuously, so the
+display follows the switches right away.
+
+| Board | Meaning |
+|---|---|
+| KEY0 | reset |
+| SW1, SW0 | inputs x[1], x[0] (up = 1.0) |
+| LEDR1, LEDR0 | echo the switches |
+| **LEDG0** | predicted class: should light for 01 and 10 only |
+| HEX0 | predicted class as a digit |
+| HEX6 | `-` when the logit is negative |
+| HEX5-HEX2 | the logit's magnitude in Q8.8 hex: `06.2B` means 0x062B / 256 = 6.168 |
+
+What you should see, and what `tb/tb_top.v` checks in simulation:
+
+| SW1 SW0 | LEDG0 | HEX6..HEX2 | logit |
+|---|---|---|---|
+| 0 0 | off | `- 06.2B` | -6.168 |
+| 0 1 | on | `  08.1D` | +8.113 |
+| 1 0 | on | `  08.1D` | +8.113 |
+| 1 1 | off | `- 08.7B` | -8.480 |
+
+### Build and program
+
+1. In Quartus, **File > Open Project** and open `quartus/de2_115_top.qpf`. The device, source files,
+   .mif, timing constraints and pins are already set.
+2. **Processing > Start Compilation.**
+3. Connect the board's USB-Blaster port, the one labeled BLASTER, and power it on. Then open
+   **Tools > Programmer**. Select USB-Blaster under Hardware Setup, add
+   `output_files/de2_115_top.sof`, check Program/Configure, and click Start.
+4. Flip SW0 and SW1 and compare against the table above.
+
+**Pins:** `de2_115_top.qsf` contains pin locations taken from the DE2-115 User Manual tables. The
+port names match Terasic's golden top. If an LED or digit behaves oddly, import the official
+`DE2_115.qsf` from the Terasic DE2-115 System CD (**Assignments > Import Assignments**). That file
+is authoritative and also sets the I/O standards.
+
+### Measured results (Quartus II 14.1, EP4CE115F29C7)
+
+| Metric | Result |
+|---|---|
+| Logic elements | 313 / 114,480 (< 1%), 161 registers |
+| Embedded multipliers | 2 9-bit elements (one 18x18), no LUT multiplier |
+| Block memory | 1 M9K (272 bits of weights) |
+| Fmax (Slow 1200mV 85C) | **98.84 MHz**, 9.88 ns setup slack at 50 MHz |
+| Latency | 27 clocks: 0.54 µs at 50 MHz, 0.27 µs at Fmax |
+| Throughput | 1.85 M inferences/s at 50 MHz, 3.66 M/s at Fmax |
+
+## Fitting the MAC on its own (optional)
+
+This is useful for measuring the Fmax of the MAC alone.
 
 1. **File > New Project Wizard.** Put the project directory in `quartus/`, name it `mac`, and set the
    top-level entity to `mac`.
@@ -182,15 +296,11 @@ failed every time:
    - **TimeQuest > Slow 1200mV 85C Model > Fmax:** this should be comfortably above 50 MHz.
      Record the number, because Fmax and resource usage are good figures for a resume.
 
-In step 5, a real top level (`de2_115_top.v`) will replace the virtual pins. It will map SW[1:0] to
-the XOR inputs, the result to LEDG[0], and the logit to HEX0-3, using the pin assignments from the
-Terasic DE2-115 System CD.
+## Ideas after XOR
 
-## Next: step 4
-
-- Instantiate a ROM (`altsyncram`, or an inferred `reg` array with `(* ram_init_file = "xor_weights.mif" *)`)
-  initialized from `weights/xor_weights.mif`.
-- Add a small FSM that walks the memory map, streams (weight, activation) pairs into the MAC,
-  applies ReLU, stores hidden activations, and then runs the output neuron. One MAC takes
-  4×3 + 5 = 17 cycles per inference.
-- Reuse the same verification approach: Python computes the logits and the testbench checks them.
+- **MNIST:** for example 784-32-10 with inputs downsampled to 14x14. `nn_core` already
+  parameterizes the layer sizes and argmax. The weights (about 25k words) fit in M9K blocks. The
+  image could come from a ROM of test digits selected by the switches.
+- **Parallelism:** use N MACs, one per hidden neuron, reading N weights per clock from a wider
+  ROM. This is the classic latency and area trade-off to measure and write up.
+- **8-bit weights with a per-layer scale factor:** this is closer to how real INT8 accelerators work.
