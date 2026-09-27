@@ -1,0 +1,28 @@
+name: simulation
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  iverilog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iverilog
+          pip install numpy
+      - name: Regenerate test vectors from the committed weights, fail if they drift
+        run: |
+          python3 python/gen_mac_vectors.py
+          python3 python/gen_nn_vectors.py
+          git diff --exit-code -- tb/vectors
+      - name: Run all testbenches
+        run: sh sim/run_iverilog.sh
+      - name: Training still converges and the quantized net still solves XOR
+        run: python3 python/train_xor.py
