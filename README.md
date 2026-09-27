@@ -369,8 +369,8 @@ SW=5 is test image #8, a badly written 5 that the network (float and Q8.8 alike)
 `$readmemh` files. That first build only reached **28.67 MHz**. The critical path was the
 argmax: a chain of 9 combinational 16-bit compares across all 10 logits, feeding the hit/label
 compare in the top level. The argmax is now a running max, updated with one compare as each logit
-comes out of the MAC, so `pred` is a register at `done`. Fmax after that fix is still to be
-measured.
+comes out of the MAC, so `pred` is a register at `done`. After the fix, timing passes at 50 MHz
+with **+6.01 ns** setup slack (slow 85C corner), which works out to an Fmax of about 71.5 MHz.
 
 ## Fitting the MAC on its own (optional)
 
