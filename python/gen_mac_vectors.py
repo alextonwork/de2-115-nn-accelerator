@@ -8,15 +8,14 @@ Outputs (tb/vectors/):
   mac_exp.hex  one line per dot product: {acc[39:0], result[15:0]}             (14 hex digits)
   mac_vectors.vh  `define N_IN / N_EXP counts for the testbench
 
-Run from the repo root:  python3 python/gen_mac_vectors.py   (after train_xor.py)
+Run from the repo root:  python3 python/gen_mac_vectors.py   (reads weights/xor_weights.hex)
 """
 import os
 import random
-import numpy as np
 
 from fixedpoint import (ONE, DATA_MAX, DATA_MIN, DATA_W, ACC_W, to_fixed,
                         to_unsigned, dot)
-import train_xor
+import gen_nn_vectors
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VEC_DIR = os.path.join(ROOT, "tb", "vectors")
@@ -65,18 +64,18 @@ def main():
     add_dot([DATA_MIN] * 256, [DATA_MIN] * 256, "256 x min*min uses all 8 guard bits")
     add_dot([DATA_MIN] * 200 + [DATA_MAX] * 200, [DATA_MIN] * 200 + [DATA_MIN] * 200,
             "large intermediate sum returning near 0")
-    # ---- XOR network neurons, using the trained weights (bias = extra term * 1.0) ----
-    for seed in range(100):
-        params, p, loss = train_xor.train(seed)
-        if np.all((p > 0.5) == (train_xor.Y > 0.5)) and loss < 0.05:
-            break
-    W1, b1, W2, b2 = params
-    qW1 = [[f(v) for v in row] for row in W1]; qb1 = [f(v) for v in b1]
-    qW2 = [[f(v) for v in row] for row in W2]; qb2 = [f(v) for v in b2]
+    # ---- XOR network neurons, using the exported weights (bias = extra term * 1.0) ----
+    rom = gen_nn_vectors.load_rom(os.path.join(ROOT, "weights", "xor_weights.hex"))
+    n_in, n_hid = gen_nn_vectors.N_IN, gen_nn_vectors.N_HID
+    b1_base, w2_base = n_hid * n_in, n_hid * n_in + n_hid
+    qW1 = [rom[j * n_in:(j + 1) * n_in] for j in range(n_hid)]
+    qb1 = rom[b1_base:b1_base + n_hid]
+    qW2 = [rom[w2_base:w2_base + n_hid]]
+    qb2 = [rom[w2_base + n_hid]]
     for x1, x2 in [(0, 0), (0, 1), (1, 0), (1, 1)]:
         xq = [x1 * ONE, x2 * ONE]
         hidden = []
-        for j in range(len(qb1)):
+        for j in range(n_hid):
             add_dot(qW1[j] + [qb1[j]], xq + [ONE], "XOR x=(%d,%d) hidden[%d]" % (x1, x2, j))
             hidden.append(max(expected[-1][1], 0))
         add_dot(qW2[0] + [qb2[0]], hidden + [ONE], "XOR x=(%d,%d) output logit" % (x1, x2))
