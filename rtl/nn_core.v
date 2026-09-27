@@ -25,9 +25,21 @@
 //
 // For XOR (2-4-1): 4*3 + 5 = 17 MAC terms, 27 clocks from start to done
 // (0.54 us at 50 MHz), measured by tb/tb_nn_core.v.
+// For MNIST (196-32-10): 32*197 + 10*33 = 6634 terms, 6644 clocks
+// (133 us at 50 MHz), measured by tb/tb_mnist.v.
+//
+// Inputs: X_EXT = 0 -> x_flat is copied into registers on start (fine for a
+//                      handful of inputs, e.g. XOR)
+//         X_EXT = 1 -> the core reads input k from an external synchronous
+//                      memory: it drives x_addr = k and expects x_data one
+//                      clock later, exactly like the weight ROM. The memory
+//                      must hold the same input for the whole inference.
+//                      Used for MNIST, where 196 pixels would otherwise cost
+//                      3136 flip-flops. x_flat is ignored.
 //
 // pred: N_OUT == 1  -> 1 bit, logit > 0 (sigmoid(z) > 0.5 without a sigmoid)
-//       N_OUT  > 1  -> index of the largest logit (argmax), for MNIST later
+//       N_OUT  > 1  -> index of the largest logit (argmax); ties go to the
+//                      lower index, same as numpy argmax
 // ---------------------------------------------------------------------------
 module nn_core #(
     parameter DATA_W   = 16,
@@ -36,13 +48,16 @@ module nn_core #(
     parameter N_IN     = 2,
     parameter N_HID    = 4,
     parameter N_OUT    = 1,
-    parameter HEX_FILE = "../weights/xor_weights.hex"   // simulation only
+    parameter X_EXT    = 0,
+    parameter HEX_FILE = "../weights/xor_weights.hex"
 ) (
     input  wire                      clk,
     input  wire                      rst_n,
 
     input  wire                      start,     // pulse while !busy to run one inference
-    input  wire [N_IN*DATA_W-1:0]    x_flat,    // input i at [i*DATA_W +: DATA_W], Q8.8
+    input  wire [N_IN*DATA_W-1:0]    x_flat,    // input i at [i*DATA_W +: DATA_W], Q8.8 (X_EXT = 0)
+    output wire [((N_IN > 1) ? $clog2(N_IN) : 1)-1:0] x_addr,  // X_EXT = 1: input index to read
+    input  wire [DATA_W-1:0]         x_data,    // X_EXT = 1: mem[x_addr] one clock later, Q8.8
     output reg                       busy,
     output reg                       done,      // 1-cycle pulse, outputs valid from here
     output wire [N_HID*DATA_W-1:0]   hidden_flat,
@@ -69,6 +84,8 @@ module nn_core #(
     reg signed [DATA_W-1:0] x_reg   [0:N_IN-1];
     reg signed [DATA_W-1:0] hidden  [0:N_HID-1];
     reg signed [DATA_W-1:0] logit   [0:N_OUT-1];
+    reg [CLS_W-1:0]         best_idx;    // running argmax of the logits
+    reg signed [DATA_W-1:0] best_val;
 
     // ---------------- FSM ----------------
     localparam S_IDLE  = 2'd0,
@@ -100,7 +117,7 @@ module nn_core #(
     reg signed [DATA_W-1:0] act;
     always @(*) begin
         if (is_bias)     act = ONE;
-        else if (!layer) act = x_reg[k];
+        else if (!layer) act = (X_EXT != 0) ? {DATA_W{1'b0}} : x_reg[k];
         else             act = hidden[k];
     end
 
@@ -112,6 +129,12 @@ module nn_core #(
 
     reg                     s_valid, s_start, s_last;
     reg signed [DATA_W-1:0] s_act;
+    reg                     s_use_x;   // this term's activation is x_data (X_EXT only)
+
+    // external input memory: addressed in the same cycle as the weight ROM,
+    // so its data lines up with the weight at the MAC input
+    assign x_addr = k;
+    wire signed [DATA_W-1:0] mac_b = (X_EXT != 0 && s_use_x) ? x_data : s_act;
 
     // ---------------- MAC ----------------
     wire                     mac_done;
@@ -121,7 +144,7 @@ module nn_core #(
     mac #(.DATA_W(DATA_W), .FRAC_W(FRAC_W), .ACC_W(ACC_W)) u_mac (
         .clk(clk), .rst_n(rst_n),
         .in_valid(s_valid), .in_start(s_start), .in_last(s_last),
-        .a(weight), .b(s_act),
+        .a(weight), .b(mac_b),
         .out_done(mac_done), .acc(mac_acc), .result(mac_result)
     );
 
@@ -140,8 +163,11 @@ module nn_core #(
             s_start <= 1'b0;
             s_last  <= 1'b0;
             s_act   <= 0;
+            s_use_x <= 1'b0;
             for (i = 0; i < N_HID; i = i + 1) hidden[i] <= 0;
             for (i = 0; i < N_OUT; i = i + 1) logit[i]  <= 0;
+            best_idx <= 0;
+            best_val <= 0;
         end else begin
             done    <= 1'b0;
             s_valid <= 1'b0;
@@ -152,14 +178,22 @@ module nn_core #(
             if (mac_done) begin
                 if (!layer) hidden[cap_idx] <= mac_result[DATA_W-1] ? {DATA_W{1'b0}} : mac_result; // ReLU
                 else        logit[cap_idx]  <= mac_result;
+                // running argmax: one compare per logit as it arrives, so the
+                // prediction is a register at done instead of an N_OUT-deep
+                // comparator chain (that chain limited Fmax to 28.7 MHz)
+                if (layer && (cap_idx == 0 || mac_result > best_val)) begin
+                    best_val <= mac_result;
+                    best_idx <= cap_idx[CLS_W-1:0];
+                end
                 cap_idx <= cap_idx + 1'b1;
             end
 
             case (state)
             S_IDLE: begin
                 if (start) begin
-                    for (i = 0; i < N_IN; i = i + 1)
-                        x_reg[i] <= x_flat[i*DATA_W +: DATA_W];
+                    if (X_EXT == 0)
+                        for (i = 0; i < N_IN; i = i + 1)
+                            x_reg[i] <= x_flat[i*DATA_W +: DATA_W];
                     busy    <= 1'b1;
                     layer   <= 1'b0;
                     neuron  <= 0;
@@ -174,6 +208,7 @@ module nn_core #(
                 s_start <= (k == 0);
                 s_last  <= last_term;
                 s_act   <= act;
+                s_use_x <= !layer && !is_bias;
                 if (last_term) begin
                     k <= 0;
                     if (last_neur) state <= S_WAIT;
@@ -217,18 +252,6 @@ module nn_core #(
         if (N_OUT == 1) begin : g_pred_sign
             assign pred = (logit[0] > 0);
         end else begin : g_pred_argmax
-            reg [CLS_W-1:0]         best_idx;
-            reg signed [DATA_W-1:0] best_val;
-            integer o;
-            always @(*) begin
-                best_idx = 0;
-                best_val = logit[0];
-                for (o = 1; o < N_OUT; o = o + 1)
-                    if (logit[o] > best_val) begin
-                        best_val = logit[o];
-                        best_idx = o;
-                    end
-            end
             assign pred = best_idx;
         end
     endgenerate

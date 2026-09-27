@@ -32,7 +32,7 @@ module tb_nn_core;
 
     nn_core #(.N_IN(N_IN), .N_HID(N_HID), .N_OUT(N_OUT), .HEX_FILE(HEX_FILE)) dut (
         .clk(clk), .rst_n(rst_n),
-        .start(start), .x_flat(x_flat),
+        .start(start), .x_flat(x_flat), .x_addr(), .x_data({DATA_W{1'b0}}),
         .busy(busy), .done(done),
         .hidden_flat(hidden_flat), .logits_flat(logits_flat), .pred(pred)
     );
