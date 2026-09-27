@@ -1,0 +1,9 @@
+sim/work/
+sim/*.vvp
+sim/transcript
+sim/*.wlf
+sim/modelsim.ini
+quartus/db/
+quartus/incremental_db/
+quartus/output_files/
+__pycache__/

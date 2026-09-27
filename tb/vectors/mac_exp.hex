@@ -1,0 +1,455 @@
+00000100000100  // 1.0 * 1.0 = 1.0
+FFFFFCA000FCA0  // -1.5 * 2.25 = -3.375
+00000000000000  // 0.5*4 + 0.25*-8 = 0
+00000000000000  // 0 * min = 0
+00000000800001  // 1 LSB * 0.5 -> 0.5 LSB rounds up to 1 LSB
+FFFFFFFF800000  // -1 LSB * 0.5 -> -0.5 LSB rounds up to 0
+FFFFFFFF7FFFFF  // -1 LSB * 0.504 -> rounds to -1 LSB
+00000000FF0001  // 3 * 85 / 2^16 -> truncation vs rounding check
+003FFF00017FFF  // max*max saturates to +max
+00400000007FFF  // min*min (+128^2) saturates to +max
+FFC00080008000  // min*max saturates to min
+00000000000000  // 100 - 100 = 0, no sat
+0000C800007FFF  // 100 + 100 saturates
+40000000007FFF  // 256 x min*min uses all 8 guard bits
+00006400006400  // large intermediate sum returning near 0
+FFFFFFED00FFED  // XOR x=(0,0) hidden[0]
+FFFFFBC000FBC0  // XOR x=(0,0) hidden[1]
+FFFFFFD100FFD1  // XOR x=(0,0) hidden[2]
+00000000000000  // XOR x=(0,0) hidden[3]
+FFFFF9D500F9D5  // XOR x=(0,0) output logit
+FFFFFFCB00FFCB  // XOR x=(0,1) hidden[0]
+00000000000000  // XOR x=(0,1) hidden[1]
+FFFFFFFF00FFFF  // XOR x=(0,1) hidden[2]
+00000349000349  // XOR x=(0,1) hidden[3]
+0000081D61081D  // XOR x=(0,1) output logit
+FFFFFFFA00FFFA  // XOR x=(1,0) hidden[0]
+00000000000000  // XOR x=(1,0) hidden[1]
+FFFFFF4800FF48  // XOR x=(1,0) hidden[2]
+00000349000349  // XOR x=(1,0) hidden[3]
+0000081D61081D  // XOR x=(1,0) output logit
+FFFFFFD800FFD8  // XOR x=(1,1) hidden[0]
+00000440000440  // XOR x=(1,1) hidden[1]
+FFFFFF7600FF76  // XOR x=(1,1) hidden[2]
+00000692000692  // XOR x=(1,1) hidden[3]
+FFFFF784C2F785  // XOR x=(1,1) output logit
+000008E44508E4  // back-to-back single term
+00002D2D6C2D2D  // back-to-back single term
+FFFFFBC3D2FBC4  // back-to-back single term
+FFFFFC8EECFC8F  // back-to-back single term
+00001F4A1B1F4A  // back-to-back single term
+00003BF0503BF0  // back-to-back single term
+000022D7E822D8  // back-to-back single term
+FFFFFD4C98FD4D  // back-to-back single term
+FFFFDDC050DDC0  // back-to-back single term
+00000B9E820B9F  // back-to-back single term
+FFFFF69F10F69F  // back-to-back single term
+000009AFB009B0  // back-to-back single term
+00000F0A800F0B  // back-to-back single term
+0000038AC0038B  // back-to-back single term
+FFFFF1843CF184  // back-to-back single term
+FFFFF11E78F11E  // back-to-back single term
+00001288781288  // back-to-back single term
+FFFFFEB56AFEB5  // back-to-back single term
+FFFFEEAA88EEAB  // back-to-back single term
+FFFFFE0750FE07  // back-to-back single term
+00008243ED7FFF  // random #0 len 26
+0000312C75312C  // random #1 len 13
+0000AC2E577FFF  // random #2 len 11
+FFFFDF9E3EDF9E  // random #3 len 25
+000020AD3220AD  // random #4 len 2
+0000563B95563C  // random #5 len 11
+FFFFBD387FBD38  // random #6 len 21
+00005E79505E79  // random #7 len 4
+FFFFDFF0A0DFF1  // random #8 len 12
+FFFFA6642CA664  // random #9 len 12
+FFFFFBC678FBC6  // random #10 len 10
+FFFFAAC5A8AAC6  // random #11 len 25
+0000260CA6260D  // random #12 len 27
+00001F101E1F10  // random #13 len 32
+00006B39126B39  // random #14 len 28
+FFFFD868B5D869  // random #15 len 20
+FFFFF83B71F83B  // random #16 len 7
+000009EF1309EF  // random #17 len 3
+0000354C1D354C  // random #18 len 29
+FFFFF44DCDF44E  // random #19 len 4
+FFFFD596BBD597  // random #20 len 3
+00003C783C3C78  // random #21 len 5
+FFFFF9B193F9B2  // random #22 len 13
+FFFF8AC7128AC7  // random #23 len 27
+FFFFC1E065C1E0  // random #24 len 11
+00002ADE912ADF  // random #25 len 2
+00003F03503F03  // random #26 len 17
+00003522B93523  // random #27 len 10
+00001C7EEC1C7F  // random #28 len 3
+0000476BC4476C  // random #29 len 32
+00005EFABD5EFB  // random #30 len 27
+FFFFB99864B998  // random #31 len 28
+FFFF89CDF789CE  // random #32 len 13
+FFFFD9188AD919  // random #33 len 5
+FFFF8A321F8A32  // random #34 len 30
+00004D2B174D2B  // random #35 len 6
+000070B46A70B4  // random #36 len 18
+FFFFC3323CC332  // random #37 len 26
+FFFFB45B2CB45B  // random #38 len 12
+FFFFF0F6BFF0F7  // random #39 len 3
+00009E2F947FFF  // random #40 len 29
+000018ED9F18EE  // random #41 len 13
+00001B0D841B0E  // random #42 len 8
+000018D3E818D4  // random #43 len 15
+FFFFFD1F5AFD1F  // random #44 len 13
+FFFFE32C0FE32C  // random #45 len 32
+FFFFF60512F605  // random #46 len 27
+FFFFF60892F609  // random #47 len 7
+FFFF9C43099C43  // random #48 len 10
+FFFF201CC88000  // random #49 len 27
+FFFFED899AED8A  // random #50 len 5
+0000087E23087E  // random #51 len 28
+00012584147FFF  // random #52 len 32
+00001BFA901BFB  // random #53 len 5
+0000D5DDD17FFF  // random #54 len 21
+FFFFACA19DACA2  // random #55 len 27
+FFFF7885278000  // random #56 len 20
+FFFFDD0ED5DD0F  // random #57 len 12
+FFFF5809E68000  // random #58 len 31
+00001A67B21A68  // random #59 len 3
+000088BCE67FFF  // random #60 len 31
+00003028D53029  // random #61 len 31
+FFFFF8DFB8F8E0  // random #62 len 4
+00005BE17F5BE1  // random #63 len 9
+0000084D33084D  // random #64 len 12
+000007C45407C4  // random #65 len 4
+FFFFB35FDCB360  // random #66 len 12
+FFFF9F1C809F1D  // random #67 len 4
+FFFFE9782EE978  // random #68 len 25
+00004DDC4F4DDC  // random #69 len 8
+FFFFDDA4E9DDA5  // random #70 len 1
+00002E63932E64  // random #71 len 13
+FFFFDF0464DF04  // random #72 len 9
+00004B3FF64B40  // random #73 len 23
+00006BD8046BD8  // random #74 len 17
+FFFFA876ABA877  // random #75 len 19
+00000B12D70B13  // random #76 len 19
+000005EA0F05EA  // random #77 len 27
+FFFF846A47846A  // random #78 len 22
+0000618F5E618F  // random #79 len 21
+FFFF5522518000  // random #80 len 23
+FFFF93913D9391  // random #81 len 9
+00002A661E2A66  // random #82 len 4
+FFFFD4CF5ED4CF  // random #83 len 5
+000051FDB951FE  // random #84 len 30
+FFFFAC99A9AC9A  // random #85 len 18
+FFFF4539C88000  // random #86 len 28
+FFFFDF2BC3DF2C  // random #87 len 3
+FFFFFFEF81FFF0  // random #88 len 26
+FFFF9417009417  // random #89 len 30
+FFFFB0E2B5B0E3  // random #90 len 32
+000033F0B133F1  // random #91 len 7
+FFFFE3D2CAE3D3  // random #92 len 12
+FFFFE2A13CE2A1  // random #93 len 7
+FFFFE41B69E41B  // random #94 len 17
+FFFF856BDD856C  // random #95 len 21
+0000B0699A7FFF  // random #96 len 28
+FFFFA9D5E7A9D6  // random #97 len 31
+FFFFFBF9D7FBFA  // random #98 len 23
+FFFFEFCFA5EFD0  // random #99 len 6
+FFFFFCC803FCC8  // random #100 len 14
+FFFFEBCBC4EBCC  // random #101 len 3
+0000236FC92370  // random #102 len 18
+FFFFE3D90DE3D9  // random #103 len 9
+000036FE9236FF  // random #104 len 23
+FFFFF78D48F78D  // random #105 len 4
+00002DE04D2DE0  // random #106 len 15
+FFFFC3EAFBC3EB  // random #107 len 23
+0000BE75407FFF  // random #108 len 15
+FFFFCEFB7FCEFB  // random #109 len 19
+00002445E02446  // random #110 len 5
+0000121A80121B  // random #111 len 5
+00007950177950  // random #112 len 21
+FFFF1928E78000  // random #113 len 19
+00007404717404  // random #114 len 25
+000026CF1626CF  // random #115 len 26
+FFFFC34D9EC34E  // random #116 len 13
+000028BA1A28BA  // random #117 len 20
+FFFFEBF86CEBF8  // random #118 len 24
+FFFF73CF3D8000  // random #119 len 22
+00006FE7356FE7  // random #120 len 24
+0000031AFB031B  // random #121 len 25
+FFFFAE691FAE69  // random #122 len 8
+FFFFF27575F275  // random #123 len 23
+FFFFDE247CDE24  // random #124 len 25
+0000BF4E1B7FFF  // random #125 len 9
+00002E4F912E50  // random #126 len 13
+00001B011B1B01  // random #127 len 22
+000015F75615F7  // random #128 len 21
+00002DCADC2DCB  // random #129 len 16
+000010C0F010C1  // random #130 len 1
+00007428EC7429  // random #131 len 20
+00001EF9CB1EFA  // random #132 len 20
+0000AF0ABC7FFF  // random #133 len 25
+00001C50DA1C51  // random #134 len 8
+FFFF94CFD694D0  // random #135 len 23
+00005558FB5559  // random #136 len 14
+00005255585255  // random #137 len 21
+0000301EA2301F  // random #138 len 7
+FFFFD53AE7D53B  // random #139 len 16
+000074A23B74A2  // random #140 len 22
+0000C3C7197FFF  // random #141 len 30
+00000F96880F97  // random #142 len 1
+00003A43DA3A44  // random #143 len 3
+00002CD3EB2CD4  // random #144 len 5
+000050BF7650BF  // random #145 len 18
+FFFFB01DC2B01E  // random #146 len 31
+000029CEEB29CF  // random #147 len 24
+000000DD4E00DD  // random #148 len 15
+00006C5F886C60  // random #149 len 9
+000013CBDD13CC  // random #150 len 1
+FFFFD216CBD217  // random #151 len 27
+FFFFF6A88BF6A9  // random #152 len 11
+FFFFDBBCFFDBBD  // random #153 len 23
+FFFF9E06DE9E07  // random #154 len 26
+00007D2A747D2A  // random #155 len 23
+0000404D10404D  // random #156 len 2
+FFFFB25FD8B260  // random #157 len 22
+FFFFD3C59CD3C6  // random #158 len 24
+FFFFB775B9B776  // random #159 len 6
+0000B2579F7FFF  // random #160 len 25
+00003EF6673EF6  // random #161 len 14
+00000087060087  // random #162 len 4
+FFFFF9448DF945  // random #163 len 6
+FFFFDB74BDDB75  // random #164 len 14
+FFFFE2044CE204  // random #165 len 2
+FFFFAD6B87AD6C  // random #166 len 4
+FFFF374BBB8000  // random #167 len 29
+00000DBF150DBF  // random #168 len 16
+000017F28717F3  // random #169 len 8
+0000219BF4219C  // random #170 len 29
+00007907E27908  // random #171 len 31
+000046733F4673  // random #172 len 27
+00002F542F2F54  // random #173 len 17
+0000037DF2037E  // random #174 len 21
+00005CF4545CF4  // random #175 len 6
+00000A00090A00  // random #176 len 3
+FFFFDAB087DAB1  // random #177 len 30
+FFFFED0155ED01  // random #178 len 5
+00001716211716  // random #179 len 4
+00000158810159  // random #180 len 3
+0000043BAD043C  // random #181 len 9
+00007DC3B27DC4  // random #182 len 19
+FFFE732D978000  // random #183 len 32
+000056E0DD56E1  // random #184 len 32
+000060EF1060EF  // random #185 len 27
+0000291F52291F  // random #186 len 18
+000026CC4826CC  // random #187 len 4
+000084D9FE7FFF  // random #188 len 19
+FFFF81AD5F81AD  // random #189 len 11
+FFFFEC9923EC99  // random #190 len 18
+FFFFB9C0FAB9C1  // random #191 len 29
+00002B37862B38  // random #192 len 8
+00000AAEF50AAF  // random #193 len 30
+FFFFFD1321FD13  // random #194 len 20
+00002992212992  // random #195 len 19
+FFFFD1FDBCD1FE  // random #196 len 17
+00000351870352  // random #197 len 12
+FFFF21E3EA8000  // random #198 len 32
+0000CDD6DF7FFF  // random #199 len 30
+00003647953648  // random #200 len 28
+0000B54A9F7FFF  // random #201 len 30
+000076526F7652  // random #202 len 17
+00004436E64437  // random #203 len 32
+FFFFBDCA59BDCA  // random #204 len 11
+FFFFF29AF0F29B  // random #205 len 5
+0000795BEC795C  // random #206 len 26
+00000791400791  // random #207 len 1
+00008EC85D7FFF  // random #208 len 20
+FFFFDDAEFCDDAF  // random #209 len 12
+FFFFFF499FFF4A  // random #210 len 28
+FFFF53CF9C8000  // random #211 len 15
+FFFFA9D343A9D3  // random #212 len 8
+0000A04A877FFF  // random #213 len 27
+FFFFDB0C7ADB0C  // random #214 len 17
+FFFFB478F3B479  // random #215 len 14
+FFFFE76405E764  // random #216 len 13
+FFFFB5B480B5B5  // random #217 len 30
+FFFF8A0B988A0C  // random #218 len 4
+FFFFECFF73ECFF  // random #219 len 9
+0000226D66226D  // random #220 len 15
+0000E09AC47FFF  // random #221 len 32
+FFFFFC1053FC10  // random #222 len 22
+00004F0A024F0A  // random #223 len 2
+00002FBDFC2FBE  // random #224 len 11
+FFFFEB17F4EB18  // random #225 len 2
+FFFFA7A30CA7A3  // random #226 len 29
+FFFFB49C3FB49C  // random #227 len 12
+000032446E3244  // random #228 len 5
+00006A1E0B6A1E  // random #229 len 5
+FFFFDCBB25DCBB  // random #230 len 19
+00000B3FA10B40  // random #231 len 18
+FFFFBC092FBC09  // random #232 len 28
+00006D5C1F6D5C  // random #233 len 17
+FFFFDC7808DC78  // random #234 len 10
+00005B25245B25  // random #235 len 25
+000029D5CD29D6  // random #236 len 5
+000022E0DE22E1  // random #237 len 13
+0000915BEA7FFF  // random #238 len 7
+00001265051265  // random #239 len 13
+00002785132785  // random #240 len 13
+000009303C0930  // random #241 len 1
+000030105D3010  // random #242 len 8
+00000848040848  // random #243 len 16
+000099B60E7FFF  // random #244 len 20
+000074072C7407  // random #245 len 30
+FFFFE2C036E2C0  // random #246 len 8
+000009E18909E2  // random #247 len 12
+00000659E8065A  // random #248 len 9
+FFFFCA630DCA63  // random #249 len 29
+00009708F97FFF  // random #250 len 32
+FFFFAF0F06AF0F  // random #251 len 23
+FFFFD093A7D094  // random #252 len 10
+FFFFD6C07CD6C0  // random #253 len 26
+FFFFD6326FD632  // random #254 len 20
+FFFFC1666AC166  // random #255 len 3
+00009B13E17FFF  // random #256 len 8
+000044E85944E8  // random #257 len 20
+FFFF990D9E990E  // random #258 len 13
+000046A54046A5  // random #259 len 15
+FFFFD44136D441  // random #260 len 2
+FFFFB1118FB112  // random #261 len 26
+FFFFED6041ED60  // random #262 len 8
+FFFFA3D473A3D4  // random #263 len 4
+FFFFE7033FE703  // random #264 len 9
+FFFFFCFF89FD00  // random #265 len 12
+00006731E86732  // random #266 len 31
+00004F500D4F50  // random #267 len 27
+00006014C66015  // random #268 len 27
+000004E0E804E1  // random #269 len 5
+0000018A4D018A  // random #270 len 3
+FFFFF59A64F59A  // random #271 len 2
+FFFFC6D984C6DA  // random #272 len 23
+FFFFF740A3F741  // random #273 len 18
+00001876EE1877  // random #274 len 17
+FFFFBEEE09BEEE  // random #275 len 22
+FFFFDA7B8FDA7C  // random #276 len 9
+FFFFB5ED75B5ED  // random #277 len 15
+00000F05980F06  // random #278 len 17
+0000983CFB7FFF  // random #279 len 12
+FFFF91BBBE91BC  // random #280 len 8
+0000605C87605D  // random #281 len 22
+00009FDB2F7FFF  // random #282 len 19
+FFFF6265F38000  // random #283 len 19
+0000261C27261C  // random #284 len 4
+000094FA2F7FFF  // random #285 len 23
+FFFFEC8E41EC8E  // random #286 len 7
+FFFFFB4A63FB4A  // random #287 len 16
+000011F87E11F8  // random #288 len 24
+00006A90DA6A91  // random #289 len 18
+00002028E32029  // random #290 len 28
+FFFFCCB465CCB4  // random #291 len 31
+FFFFD67E24D67E  // random #292 len 6
+FFFFB7E7A6B7E8  // random #293 len 9
+FFFFAEDB40AEDB  // random #294 len 20
+00000309CA030A  // random #295 len 17
+FFFFEE0CE3EE0D  // random #296 len 27
+FFFFEEBE94EEBF  // random #297 len 17
+000004BDC204BE  // random #298 len 29
+FFFFEEE87CEEE8  // random #299 len 25
+002FF71D7D7FFF  // full-range random #0 len 13
+FFFBCA6DBC8000  // full-range random #1 len 5
+003C08BC5B7FFF  // full-range random #2 len 7
+FFF3AC2F6F8000  // full-range random #3 len 9
+FFF1B1CF7E8000  // full-range random #4 len 12
+FFA877AED88000  // full-range random #5 len 11
+0056D9A1B77FFF  // full-range random #6 len 10
+FFD9A62B968000  // full-range random #7 len 2
+000F594F607FFF  // full-range random #8 len 5
+FFE0B36E7E8000  // full-range random #9 len 15
+FFD15EF5498000  // full-range random #10 len 14
+FFD3B03A7B8000  // full-range random #11 len 4
+FFF11DC8498000  // full-range random #12 len 12
+FFB98F6FC18000  // full-range random #13 len 16
+FFBA81F8478000  // full-range random #14 len 7
+00C17873B07FFF  // full-range random #15 len 13
+009667325B7FFF  // full-range random #16 len 15
+FFE6263E2E8000  // full-range random #17 len 13
+000F03213B7FFF  // full-range random #18 len 2
+FF90E950758000  // full-range random #19 len 7
+FFDA8A6AF08000  // full-range random #20 len 5
+006797E33A7FFF  // full-range random #21 len 8
+FF69EC2F788000  // full-range random #22 len 10
+00066FB15C7FFF  // full-range random #23 len 4
+FFFE9717FE8000  // full-range random #24 len 9
+FFBAF9C0AF8000  // full-range random #25 len 5
+FF809877288000  // full-range random #26 len 14
+FFF2C6A3828000  // full-range random #27 len 3
+001E03AAE57FFF  // full-range random #28 len 7
+014495A5687FFF  // full-range random #29 len 16
+FFF53594E98000  // full-range random #30 len 5
+00318F229D7FFF  // full-range random #31 len 7
+FFC0D00ED38000  // full-range random #32 len 8
+FFF39B8A628000  // full-range random #33 len 8
+FF47C1D1328000  // full-range random #34 len 14
+003C36A3E57FFF  // full-range random #35 len 12
+FFF75AC6248000  // full-range random #36 len 4
+FFEEF1BA2F8000  // full-range random #37 len 12
+FFD1203E538000  // full-range random #38 len 3
+FFF9A6DC088000  // full-range random #39 len 1
+FFC1A5787F8000  // full-range random #40 len 7
+FFFEE158AB8000  // full-range random #41 len 5
+FFF9B50DCD8000  // full-range random #42 len 3
+FFE8F19F2C8000  // full-range random #43 len 2
+003F7B30547FFF  // full-range random #44 len 15
+FFB9FFC5E88000  // full-range random #45 len 4
+FFE00075278000  // full-range random #46 len 4
+00427CE5617FFF  // full-range random #47 len 16
+00005BB4805BB5  // full-range random #48 len 14
+FF76EF7CFA8000  // full-range random #49 len 14
+005308DC577FFF  // full-range random #50 len 10
+0037A988267FFF  // full-range random #51 len 12
+0020B662ED7FFF  // full-range random #52 len 9
+004D4228597FFF  // full-range random #53 len 6
+00470DD2827FFF  // full-range random #54 len 12
+0014CD2B347FFF  // full-range random #55 len 9
+00070014DC7FFF  // full-range random #56 len 1
+004FBD0B9E7FFF  // full-range random #57 len 14
+0079A45FCA7FFF  // full-range random #58 len 14
+FFF0E290228000  // full-range random #59 len 15
+FFE8AA98FB8000  // full-range random #60 len 2
+002CCFFBC77FFF  // full-range random #61 len 3
+FFEDFB37898000  // full-range random #62 len 11
+FFFD4DA5588000  // full-range random #63 len 7
+0037AC92BF7FFF  // full-range random #64 len 8
+0009DFDA667FFF  // full-range random #65 len 13
+003A3556937FFF  // full-range random #66 len 14
+0015FE983A7FFF  // full-range random #67 len 9
+FFDF49B3BC8000  // full-range random #68 len 5
+FFBB53E2248000  // full-range random #69 len 4
+005B4933FB7FFF  // full-range random #70 len 10
+FFBB54FF108000  // full-range random #71 len 14
+001FE40CBA7FFF  // full-range random #72 len 7
+000046A8C146A9  // full-range random #73 len 15
+FFE19917138000  // full-range random #74 len 16
+FFF42335688000  // full-range random #75 len 4
+00138B8F5B7FFF  // full-range random #76 len 15
+FFAA0D0D098000  // full-range random #77 len 9
+009808CE9A7FFF  // full-range random #78 len 16
+004CC65D1E7FFF  // full-range random #79 len 14
+0075DD111F7FFF  // full-range random #80 len 12
+FFD73D935D8000  // full-range random #81 len 3
+FFD05000978000  // full-range random #82 len 16
+00143F68097FFF  // full-range random #83 len 4
+003911CE2C7FFF  // full-range random #84 len 7
+FFB836B5838000  // full-range random #85 len 11
+FFFCDD970A8000  // full-range random #86 len 6
+FF85BA78568000  // full-range random #87 len 10
+00310740977FFF  // full-range random #88 len 16
+FFC884D7B18000  // full-range random #89 len 12
+000AAD745B7FFF  // full-range random #90 len 1
+FFC985D7228000  // full-range random #91 len 11
+001B0ADF4B7FFF  // full-range random #92 len 10
+0074C7BEEA7FFF  // full-range random #93 len 12
+FFB2A8AA148000  // full-range random #94 len 14
+0002A109507FFF  // full-range random #95 len 4
+FFFFE4B559E4B5  // full-range random #96 len 5
+0002E0F7F97FFF  // full-range random #97 len 15
+000EEEB1467FFF  // full-range random #98 len 1
+FF84A8AA998000  // full-range random #99 len 10
