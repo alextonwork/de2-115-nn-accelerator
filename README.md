@@ -10,7 +10,8 @@ verification in simulation, and then to hardware.
 | 2 | Export weights (.mif for Quartus, .hex for simulation), build a pipelined MAC unit | done |
 | 3 | Self-checking testbench, verified against a bit-exact Python model | done, 455/455 pass |
 | 4 | Full forward pass: .mif-initialized weight ROM, FSM sequencer, ReLU, board top level | done, 32/32 + board test pass |
-| 5 | Program the DE2-115 and verify XOR on LEDs / 7-segment | ready to try |
+| 5 | Program the DE2-115 and verify XOR on LEDs / 7-segment | compiled: 313 LEs, 98.84 MHz |
+| 6 | MNIST: 196-32-10 on 14x14 digits, same `nn_core`, 16 test digits on the board | 1000/1000 bit-exact in sim, ready for the board |
 
 ## Layout
 
@@ -19,20 +20,26 @@ python/fixedpoint.py       bit-exact fixed-point model (the golden reference)
 python/train_xor.py        train, quantize, check quantized accuracy, export weights
 python/gen_mac_vectors.py  generate stimulus + expected results for the MAC testbench
 python/gen_nn_vectors.py   expected hidden/logit/class for the forward-pass testbench
+python/train_mnist.py      MNIST: train 196-32-10, quantize, measure accuracy, export ROMs + vectors
 weights/xor_weights.mif    Quartus memory init file (17 x 16-bit words)
-weights/xor_weights.hex    same contents for $readmemh
+weights/xor_weights.hex    same contents for $readmemh (this is what the ROM loads)
+weights/mnist_*.hex/.mif   MNIST weights (6634 words), 16 demo images, their labels
 rtl/mac.v                  parameterized 2-stage pipelined multiply-accumulate unit
-rtl/weight_rom.v           M9K ROM, initialized from the .mif in Quartus (.hex in simulation)
+rtl/weight_rom.v           M9K ROM, initialized with $readmemh (simulation and Quartus)
 rtl/nn_core.v              2-layer MLP forward pass: FSM + ROM + one MAC
 rtl/hex7seg.v              7-segment decoder
-rtl/de2_115_top.v          board top level: switches in, LEDs + 7-segment out
+rtl/de2_115_top.v          XOR board top level: switches in, LEDs + 7-segment out
+rtl/de2_115_mnist_top.v    MNIST board top level: image ROM, SW selects a digit, HEX shows result
 tb/tb_mac.v                self-checking MAC testbench
 tb/tb_nn_core.v            self-checking forward-pass testbench
 tb/tb_top.v                board-level test (switches -> LEDs / HEX digits)
+tb/tb_mnist.v              MNIST forward pass on 1000 test images vs Python, bit for bit
+tb/tb_mnist_top.v          MNIST board-level test (all 16 stored digits)
 tb/vectors/                generated stimulus / expected results
 sim/run_modelsim.do        ModelSim script (takes the testbench name)
 sim/run_iverilog.sh        runs all testbenches with Icarus Verilog
-quartus/de2_115_top.*      ready-made Quartus project for the board (device, files, pins, timing)
+quartus/de2_115_top.*      ready-made Quartus project for the XOR board demo
+quartus/de2_115_mnist.*    ready-made Quartus project for the MNIST board demo
 quartus/mac.sdc, mac_virtual_pins.tcl   for fitting the MAC on its own
 .github/workflows/sim.yml  CI: regenerates vectors and runs every testbench on each push
 ```
@@ -204,12 +211,13 @@ The output layer starts once all four hidden activations are back.
 - **Scales to MNIST:** `N_IN`, `N_HID` and `N_OUT` are parameters. With `N_OUT > 1`, `pred`
   becomes the argmax of the logits.
 
-**Weight loading.** `weight_rom.v` has the attribute
-`(* ram_init_file = "../weights/xor_weights.mif" *)`, so Quartus bakes the .mif into the M9K
-block in the .sof. Simulation loads the matching .hex with `$readmemh`, and that part is inside
-`translate_off` so it never reaches synthesis. You can change the weights without recompiling:
-edit the .mif, then run **Processing > Update Memory Initialization File** and
-**Assembler**.
+**Weight loading.** `weight_rom.v` fills its memory with `$readmemh(HEX_FILE)`, and Quartus
+honours that for inferred ROMs, so the same .hex file initializes the M9K in the .sof and the
+simulation model. `HEX_FILE` is a parameter, which is what lets one ROM module serve the XOR
+weights, the MNIST weights and the MNIST image store. (Step 4 originally used a
+`ram_init_file` attribute, but an attribute can't take a parameter.) Paths are relative to
+`sim/` or `quartus/`, both one level below the repo root. The .mif files hold the same data with
+comments.
 
 **Verification.** `python/gen_nn_vectors.py` reads the weights back from `xor_weights.hex`,
 which is exactly what the ROM holds. It computes the expected hidden activations, logit and class
@@ -277,6 +285,89 @@ is authoritative and also sets the I/O standards.
 | Latency | 27 clocks: 0.54 µs at 50 MHz, 0.27 µs at Fmax |
 | Throughput | 1.85 M inferences/s at 50 MHz, 3.66 M/s at Fmax |
 
+## Step 6: MNIST digits
+
+Same `nn_core`, same MAC, same Q8.8 arithmetic, bigger parameters:
+
+```
+14x14 pixels (196) -> Dense(32) -> ReLU -> Dense(10) -> argmax
+```
+
+### Training and quantization (`python/train_mnist.py`)
+
+The 28x28 MNIST digits are 2x2 average-pooled to 14x14 and scaled to [0, 1]. A plain numpy MLP
+(Adam, 20 epochs, small L2) is trained on 55k images, with 5k held out for validation. The weights
+are then rounded to Q8.8 and the whole 10,000-image test set is run through a vectorized copy of
+the hardware arithmetic (40-bit accumulator, round half up, saturate, ReLU, first-max argmax).
+
+```
+python3 python/train_mnist.py          # downloads MNIST once into data/ (git-ignored), ~10 s
+test accuracy, float32 model : 96.17%
+test accuracy, Q8.8 bit-exact: 96.16%  (9616 / 10000)
+Q8.8 and float agree on 99.93% of test images
+weight range [-2.281, 1.365]
+```
+
+So quantizing to Q8.8 costs 0.01 points. The 40-bit accumulator never gets close to wrapping; the
+script asserts that.
+
+### What changed in the hardware
+
+- **Inputs come from memory.** 196 pixels as registers would be 3,136 flip-flops, so `nn_core`
+  has a new `X_EXT` parameter. With `X_EXT = 1` it drives `x_addr = k` in the same cycle as the
+  weight ROM address and takes `x_data` one clock later, so the pixel arrives at the MAC together
+  with its weight. XOR keeps `X_EXT = 0` and is unchanged (27 cycles, same testbench).
+- **Everything else is parameters.** Counters are sized from `N_IN`/`N_HID`/`N_OUT`, the ROM
+  depth is `32*196 + 32 + 10*32 + 10 = 6634` words, and `pred` becomes a 4-bit argmax.
+- **Memory map** is the same as XOR: `W1 (32x196) | b1 (32) | W2 (10x32) | b2 (10)`.
+
+### Simulation
+
+`tb/tb_mnist.v` runs the first 1,000 test images through the RTL. The testbench plays the image
+memory, and every one of the 10 logits and the predicted digit must match Python bit for bit:
+
+```
+RTL accuracy: 964 / 1000 correct (96.4%)
+latency: 6644 cycles = 132.9 us at 50 MHz
+TEST PASSED: 1000 MNIST inferences matched the Python model bit-for-bit
+```
+
+Latency is `32 x 197 + 10 x 33 = 6634` MAC terms plus 10 cycles of pipeline fill and drain:
+**6,644 clocks, 132.9 µs at 50 MHz, about 7,500 digits per second** on one MAC.
+
+### On the board (`rtl/de2_115_mnist_top.v`)
+
+16 test digits sit in an on-chip image ROM (`weights/mnist_images.hex`, 256 words per image so the
+address is just `{image, pixel}`). They are the first test image of each digit 0-9 plus the next
+six by index, picked without looking at the results. The core classifies all 16 round-robin
+forever, about every 2 ms, and remembers each answer.
+
+| Board | Meaning |
+|---|---|
+| KEY0 | reset |
+| SW3-SW0 | which stored digit to show (0-15) |
+| **HEX0** | predicted digit |
+| **HEX2** | true label |
+| LEDG0 / LEDR17 | selected digit right / wrong |
+| LEDR15-LEDR0 | one lamp per stored digit, lit = classified correctly |
+| HEX7-HEX4, SW17 down | latency in clock cycles, measured by a hardware counter (expect `6644`) |
+| HEX7-HEX4, SW17 up | how many of the 16 are right (expect `15`) |
+
+| SW | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| label (HEX2) | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 1 | 4 | 9 | 0 | 9 | 0 |
+| pred (HEX0) | 0 | 1 | 2 | 3 | 4 | **6** | 6 | 7 | 8 | 9 | 1 | 4 | 9 | 0 | 9 | 0 |
+
+SW=5 is test image #8, a badly written 5 that the network (float and Q8.8 alike) calls a 6.
+`tb/tb_mnist_top.v` checks every row of this table, the lamps and both HEX7-4 modes.
+
+**Build:** open `quartus/de2_115_mnist.qpf`, compile, and program
+`output_files/de2_115_mnist.sof` the same way as step 5. Pins are the same as the XOR project.
+
+**Expected resources** (estimates, Quartus will report the real numbers): one 18x18 multiplier,
+roughly 13-16 M9Ks for the 106 kbit of weights and 8 for the 64 kbit image store (out of 432), and
+around 1-2k LEs, mostly the 32 hidden registers, their 32:1 read mux and the argmax.
+
 ## Fitting the MAC on its own (optional)
 
 This is useful for measuring the Fmax of the MAC alone.
@@ -296,11 +387,8 @@ This is useful for measuring the Fmax of the MAC alone.
    - **TimeQuest > Slow 1200mV 85C Model > Fmax:** this should be comfortably above 50 MHz.
      Record the number, because Fmax and resource usage are good figures for a resume.
 
-## Ideas after XOR
+## Ideas after MNIST
 
-- **MNIST:** for example 784-32-10 with inputs downsampled to 14x14. `nn_core` already
-  parameterizes the layer sizes and argmax. The weights (about 25k words) fit in M9K blocks. The
-  image could come from a ROM of test digits selected by the switches.
 - **Parallelism:** use N MACs, one per hidden neuron, reading N weights per clock from a wider
   ROM. This is the classic latency and area trade-off to measure and write up.
 - **8-bit weights with a per-layer scale factor:** this is closer to how real INT8 accelerators work.
