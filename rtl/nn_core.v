@@ -84,6 +84,8 @@ module nn_core #(
     reg signed [DATA_W-1:0] x_reg   [0:N_IN-1];
     reg signed [DATA_W-1:0] hidden  [0:N_HID-1];
     reg signed [DATA_W-1:0] logit   [0:N_OUT-1];
+    reg [CLS_W-1:0]         best_idx;    // running argmax of the logits
+    reg signed [DATA_W-1:0] best_val;
 
     // ---------------- FSM ----------------
     localparam S_IDLE  = 2'd0,
@@ -164,6 +166,8 @@ module nn_core #(
             s_use_x <= 1'b0;
             for (i = 0; i < N_HID; i = i + 1) hidden[i] <= 0;
             for (i = 0; i < N_OUT; i = i + 1) logit[i]  <= 0;
+            best_idx <= 0;
+            best_val <= 0;
         end else begin
             done    <= 1'b0;
             s_valid <= 1'b0;
@@ -174,6 +178,13 @@ module nn_core #(
             if (mac_done) begin
                 if (!layer) hidden[cap_idx] <= mac_result[DATA_W-1] ? {DATA_W{1'b0}} : mac_result; // ReLU
                 else        logit[cap_idx]  <= mac_result;
+                // running argmax: one compare per logit as it arrives, so the
+                // prediction is a register at done instead of an N_OUT-deep
+                // comparator chain (that chain limited Fmax to 28.7 MHz)
+                if (layer && (cap_idx == 0 || mac_result > best_val)) begin
+                    best_val <= mac_result;
+                    best_idx <= cap_idx[CLS_W-1:0];
+                end
                 cap_idx <= cap_idx + 1'b1;
             end
 
@@ -241,18 +252,6 @@ module nn_core #(
         if (N_OUT == 1) begin : g_pred_sign
             assign pred = (logit[0] > 0);
         end else begin : g_pred_argmax
-            reg [CLS_W-1:0]         best_idx;
-            reg signed [DATA_W-1:0] best_val;
-            integer o;
-            always @(*) begin
-                best_idx = 0;
-                best_val = logit[0];
-                for (o = 1; o < N_OUT; o = o + 1)
-                    if (logit[o] > best_val) begin
-                        best_val = logit[o];
-                        best_idx = o;
-                    end
-            end
             assign pred = best_idx;
         end
     endgenerate

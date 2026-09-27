@@ -364,9 +364,13 @@ SW=5 is test image #8, a badly written 5 that the network (float and Q8.8 alike)
 **Build:** open `quartus/de2_115_mnist.qpf`, compile, and program
 `output_files/de2_115_mnist.sof` the same way as step 5. Pins are the same as the XOR project.
 
-**Expected resources** (estimates, Quartus will report the real numbers): one 18x18 multiplier,
-roughly 13-16 M9Ks for the 106 kbit of weights and 8 for the 64 kbit image store (out of 432), and
-around 1-2k LEs, mostly the 32 hidden registers, their 32:1 read mux and the argmax.
+**Measured (Quartus II 14.1, first build):** 1,652 LEs (873 registers), 24 M9Ks (16 for the
+106 kbit of weights, 8 for the images), and one 18x18 multiplier. Both ROMs initialized from the
+`$readmemh` files. That first build only reached **28.67 MHz**. The critical path was the
+argmax: a chain of 9 combinational 16-bit compares across all 10 logits, feeding the hit/label
+compare in the top level. The argmax is now a running max, updated with one compare as each logit
+comes out of the MAC, so `pred` is a register at `done`. Fmax after that fix is still to be
+measured.
 
 ## Fitting the MAC on its own (optional)
 
