@@ -53,7 +53,7 @@ module de2_115_top (
 
     nn_core #(.N_IN(2), .N_HID(4), .N_OUT(1)) u_core (
         .clk(clk), .rst_n(rst_n),
-        .start(!busy && !done), .x_flat(x_flat),
+        .start(!busy && !done), .x_flat(x_flat), .x_addr(), .x_data({DATA_W{1'b0}}),
         .busy(busy), .done(done),
         .hidden_flat(hidden_flat), .logits_flat(logit), .pred(pred)
     );
