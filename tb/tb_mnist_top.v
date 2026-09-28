@@ -5,10 +5,18 @@
 // image and checks what a person would see: HEX0 = the Python Q8.8 prediction,
 // HEX2 = the true label, LEDG[0]/LEDR[17] = right/wrong, LEDR[15:0] = the
 // per-image hit lamps, and HEX7-4 = latency (SW[17] down) / correct count (up).
+// Run with -P tb_mnist_top.N_MAC=<n> for each lane count.
 // ---------------------------------------------------------------------------
 `timescale 1ns / 1ps
 
 module tb_mnist_top;
+
+    parameter N_MAC = 32;
+
+    // latency formula from rtl/nn_core_par.v, for MNIST 196-32-10
+    localparam G1      = 32 / N_MAC;
+    localparam G2      = (10 + N_MAC - 1) / N_MAC;
+    localparam EXP_LAT = G1*197 + G2*33 + 9 + (10 - (G2-1)*N_MAC);
 
     reg CLOCK_50 = 1'b0;
     always #10 CLOCK_50 = ~CLOCK_50;
@@ -19,7 +27,7 @@ module tb_mnist_top;
     wire [17:0] LEDR;
     wire [6:0]  HEX0, HEX1, HEX2, HEX3, HEX4, HEX5, HEX6, HEX7;
 
-    de2_115_mnist_top dut (.CLOCK_50(CLOCK_50), .KEY(KEY), .SW(SW), .LEDG(LEDG), .LEDR(LEDR),
+    de2_115_mnist_top #(.N_MAC(N_MAC)) dut (.CLOCK_50(CLOCK_50), .KEY(KEY), .SW(SW), .LEDG(LEDG), .LEDR(LEDR),
                            .HEX0(HEX0), .HEX1(HEX1), .HEX2(HEX2), .HEX3(HEX3),
                            .HEX4(HEX4), .HEX5(HEX5), .HEX6(HEX6), .HEX7(HEX7));
 
@@ -46,6 +54,11 @@ module tb_mnist_top;
         end
     endfunction
 
+    function integer dval;          // a leading-blank digit counts as 0
+        input [6:0] s;
+        dval = (digit(s) == 4'hF) ? 0 : digit(s);
+    endfunction
+
     integer s, n_errors = 0, n_hit = 0;
     reg ok;
 
@@ -54,7 +67,7 @@ module tb_mnist_top;
         $readmemh("../weights/mnist_labels.hex", label);
         repeat (5) @(posedge CLOCK_50);
         KEY[0] = 1'b1;                                   // release reset
-        repeat (17 * 6700) @(posedge CLOCK_50);          // one full sweep + margin
+        repeat (17 * (EXP_LAT + 50)) @(posedge CLOCK_50); // one full sweep + margin
 
         for (s = 0; s < 16; s = s + 1) begin
             SW[3:0] = s;
@@ -74,10 +87,11 @@ module tb_mnist_top;
         // HEX7-4: latency, then the correct count
         SW[17] = 1'b0;
         repeat (4) @(posedge CLOCK_50);
-        $display("SW17 down: HEX7-4 = %0d%0d%0d%0d (latency, clock cycles)",
-                 digit(HEX7), digit(HEX6), digit(HEX5), digit(HEX4));
-        if ({digit(HEX7), digit(HEX6), digit(HEX5), digit(HEX4)} !== 16'h6644) begin
-            $display("FAIL latency display, expected 6644");
+        $display("SW17 down: HEX7-4 = %0d (latency, clock cycles)",
+                 dval(HEX7) * 1000 + dval(HEX6) * 100 + dval(HEX5) * 10 + dval(HEX4));
+        if (dval(HEX7) * 1000 + dval(HEX6) * 100 + dval(HEX5) * 10 + dval(HEX4) != EXP_LAT ||
+            (EXP_LAT < 1000 && HEX7 !== 7'h7F)) begin
+            $display("FAIL latency display, expected %0d", EXP_LAT);
             n_errors = n_errors + 1;
         end
         SW[17] = 1'b1;
