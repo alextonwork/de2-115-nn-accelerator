@@ -21,7 +21,8 @@ jobs:
         run: |
           python3 python/gen_mac_vectors.py
           python3 python/gen_nn_vectors.py
-          git diff --exit-code -- tb/vectors
+          python3 python/gen_par_weights.py
+          git diff --exit-code -- tb/vectors weights
       - name: Run all testbenches
         run: sh sim/run_iverilog.sh
       - name: Training still converges and the quantized net still solves XOR
