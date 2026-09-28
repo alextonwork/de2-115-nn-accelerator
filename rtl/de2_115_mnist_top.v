@@ -4,8 +4,12 @@
 // de2_115_mnist_top.v  -  MNIST digit classifier on the Terasic DE2-115
 //
 // 16 test digits (14x14, Q8.8) live in an on-chip image ROM. The core
-// classifies them round-robin, forever, one after another (6644 clocks each,
-// so all 16 are refreshed about every 2 ms) and remembers each prediction.
+// (rtl/nn_core_par.v, N_MAC parallel MACs) classifies them round-robin,
+// forever, one after another (249 clocks each at N_MAC = 32, 6644 at
+// N_MAC = 1) and remembers each prediction.
+//
+// N_MAC picks the number of MACs (1, 2, 4, 8, 16 or 32) and the matching
+// wide weight ROM. quartus/sweep_n_mac.tcl compiles every value in turn.
 //
 //   KEY[0]      reset (press to reset)
 //   SW[3:0]     which stored digit to show (0-15)
@@ -22,7 +26,8 @@
 // Port names match Terasic's DE2_115 pin assignment file, same as de2_115_top.
 // ---------------------------------------------------------------------------
 module de2_115_mnist_top #(
-    parameter WEIGHT_FILE = "../weights/mnist_weights.hex",
+    parameter N_MAC       = 32,
+    parameter WEIGHT_FILE = "",   // default: ../weights/mnist_weights_par<NN>.hex
     parameter IMAGE_FILE  = "../weights/mnist_images.hex",
     parameter LABEL_FILE  = "../weights/mnist_labels.hex"
 ) (
@@ -76,10 +81,20 @@ module de2_115_mnist_top #(
     wire [3:0]               pred;
     wire                     start = rst_n && !busy && !done;
 
-    nn_core #(.N_IN(N_IN), .N_HID(N_HID), .N_OUT(N_OUT), .X_EXT(1),
-              .HEX_FILE(WEIGHT_FILE)) u_core (
+    // file names all have the same length so this string mux works in both
+    // Icarus and Quartus (shorter strings would be zero-padded)
+    localparam WFILE = (WEIGHT_FILE != "") ? WEIGHT_FILE :
+                       (N_MAC ==  1) ? "../weights/mnist_weights_par01.hex" :
+                       (N_MAC ==  2) ? "../weights/mnist_weights_par02.hex" :
+                       (N_MAC ==  4) ? "../weights/mnist_weights_par04.hex" :
+                       (N_MAC ==  8) ? "../weights/mnist_weights_par08.hex" :
+                       (N_MAC == 16) ? "../weights/mnist_weights_par16.hex" :
+                                       "../weights/mnist_weights_par32.hex";
+
+    nn_core_par #(.N_IN(N_IN), .N_HID(N_HID), .N_OUT(N_OUT), .N_MAC(N_MAC),
+                  .HEX_FILE(WFILE)) u_core (
         .clk(clk), .rst_n(rst_n),
-        .start(start), .x_flat({N_IN*DATA_W{1'b0}}), .x_addr(x_addr), .x_data(x_data),
+        .start(start), .x_addr(x_addr), .x_data(x_data),
         .busy(busy), .done(done),
         .hidden_flat(hidden_flat), .logits_flat(logits_flat), .pred(pred)
     );

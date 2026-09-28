@@ -12,6 +12,7 @@ verification in simulation, and then to hardware.
 | 4 | Full forward pass: .mif-initialized weight ROM, FSM sequencer, ReLU, board top level | done, 32/32 + board test pass |
 | 5 | Program the DE2-115 and verify XOR on LEDs / 7-segment | compiled: 313 LEs, 98.84 MHz |
 | 6 | MNIST: 196-32-10 on 14x14 digits, same `nn_core`, 16 test digits on the board | 1000/1000 bit-exact in sim, ready for the board |
+| 7 | Parallel MACs: N = 1-32 lanes, speed vs area sweep in Quartus | 26.7x faster for 2.9x the LEs, 77-88 MHz Fmax, board run pending |
 
 ## Layout
 
@@ -21,12 +22,16 @@ python/train_xor.py        train, quantize, check quantized accuracy, export wei
 python/gen_mac_vectors.py  generate stimulus + expected results for the MAC testbench
 python/gen_nn_vectors.py   expected hidden/logit/class for the forward-pass testbench
 python/train_mnist.py      MNIST: train 196-32-10, quantize, measure accuracy, export ROMs + vectors
+python/gen_par_weights.py  re-pack the MNIST weights into one wide ROM per MAC count
+python/plot_sweep.py       speed-vs-area plot + README table from the Quartus sweep CSV
 weights/xor_weights.mif    Quartus memory init file (17 x 16-bit words)
 weights/xor_weights.hex    same contents for $readmemh (this is what the ROM loads)
 weights/mnist_*.hex/.mif   MNIST weights (6634 words), 16 demo images, their labels
+weights/mnist_weights_parNN.hex  the same weights, N words per row, for N = 01..32 MACs
 rtl/mac.v                  parameterized 2-stage pipelined multiply-accumulate unit
 rtl/weight_rom.v           M9K ROM, initialized with $readmemh (simulation and Quartus)
 rtl/nn_core.v              2-layer MLP forward pass: FSM + ROM + one MAC
+rtl/nn_core_par.v          the same forward pass on N_MAC parallel MACs (MNIST board top uses this)
 rtl/hex7seg.v              7-segment decoder
 rtl/de2_115_top.v          XOR board top level: switches in, LEDs + 7-segment out
 rtl/de2_115_mnist_top.v    MNIST board top level: image ROM, SW selects a digit, HEX shows result
@@ -34,12 +39,14 @@ tb/tb_mac.v                self-checking MAC testbench
 tb/tb_nn_core.v            self-checking forward-pass testbench
 tb/tb_top.v                board-level test (switches -> LEDs / HEX digits)
 tb/tb_mnist.v              MNIST forward pass on 1000 test images vs Python, bit for bit
+tb/tb_mnist_par.v          nn_core_par vs Python, bit for bit, for any N_MAC
 tb/tb_mnist_top.v          MNIST board-level test (all 16 stored digits)
 tb/vectors/                generated stimulus / expected results
 sim/run_modelsim.do        ModelSim script (takes the testbench name)
 sim/run_iverilog.sh        runs all testbenches with Icarus Verilog
 quartus/de2_115_top.*      ready-made Quartus project for the XOR board demo
 quartus/de2_115_mnist.*    ready-made Quartus project for the MNIST board demo
+quartus/sweep_n_mac.tcl    compiles the MNIST design for N_MAC = 1..32, writes results/n_mac_sweep.csv
 quartus/mac.sdc, mac_virtual_pins.tcl   for fitting the MAC on its own
 .github/workflows/sim.yml  CI: regenerates vectors and runs every testbench on each push
 ```
@@ -350,7 +357,7 @@ forever, about every 2 ms, and remembers each answer.
 | **HEX2** | true label |
 | LEDG0 / LEDR17 | selected digit right / wrong |
 | LEDR15-LEDR0 | one lamp per stored digit, lit = classified correctly |
-| HEX7-HEX4, SW17 down | latency in clock cycles, measured by a hardware counter (expect `6644`) |
+| HEX7-HEX4, SW17 down | latency in clock cycles, measured by a hardware counter (`6644` with one MAC; the board top now defaults to 32 MACs, `249`, see step 7) |
 | HEX7-HEX4, SW17 up | how many of the 16 are right (expect `15`) |
 
 | SW | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 |
@@ -371,6 +378,95 @@ argmax: a chain of 9 combinational 16-bit compares across all 10 logits, feeding
 compare in the top level. The argmax is now a running max, updated with one compare as each logit
 comes out of the MAC, so `pred` is a register at `done`. After the fix, timing passes at 50 MHz
 with **+6.01 ns** setup slack (slow 85C corner), which works out to an Fmax of about 71.5 MHz.
+
+## Step 7: parallel MACs
+
+One MAC does all 6,634 multiplies of an MNIST inference, one per clock, while the EP4CE115 has
+266 18x18 multipliers. `rtl/nn_core_par.v` computes `N_MAC` neurons at once, and the sweep over
+N = 1, 2, 4, 8, 16, 32 measures what each doubling costs in logic, memory and clock rate.
+
+### Architecture
+
+- **Lanes.** Lane `l` of group `g` computes neuron `g*N + l`. All lanes see the same activation
+  each clock (a pixel in layer 1, `hidden[k]` in layer 2), broadcast to every MAC, and multiply it
+  by their own weight. Input bandwidth stays at one word per clock.
+- **Weight bandwidth grows with N**, so the weights live in one wide ROM with N words per row
+  (`weights/mnist_weights_parNN.hex`, written by `python/gen_par_weights.py`). Rows are stored in
+  exactly the order they are read, so the ROM address is a plain counter. The words are the same
+  Q8.8 values as `mnist_weights.hex`, only reordered, so every N gives identical logits.
+- **Uneven output layer.** 10 outputs do not divide into 4, 8, 16 or 32 lanes. The spare lanes in
+  the last group read zero weights and their results are dropped, so N = 16 and N = 32 both need
+  one 33-clock pass for layer 2.
+- **Argmax.** With N >= 10 all ten logits arrive in the same clock, and comparing them in one
+  cycle is the same 10-deep chain that limited step 6 to 28.7 MHz. So the argmax scans one
+  logit per clock as soon as it is written. For small N it keeps pace with the MACs for free; for
+  N >= 10 it adds 9 clocks.
+- **Result capture** writes each hidden/logit register from exactly one lane, so it is an
+  enable, not a mux.
+
+### Latency (simulation)
+
+`latency = (32/N) x 197 + ceil(10/N) x 33 + 9 + L`, where L is the number of logits in the
+last output group (the argmax scan). `tb/tb_mnist_par.v` checks every N bit for bit against Python.
+
+| MACs | Cycles | @ 50 MHz | Speedup |
+|---:|---:|---:|---:|
+| 1 | 6,644 | 132.9 µs | 1.0x |
+| 2 | 3,328 | 66.6 µs | 2.0x |
+| 4 | 1,686 | 33.7 µs | 3.9x |
+| 8 | 865 | 17.3 µs | 7.7x |
+| 16 | 446 | 8.9 µs | 14.9x |
+| 32 | 249 | 5.0 µs | 26.7x |
+
+The speedup falls below N at the top end for two reasons. Layer 2 stops shrinking once N >= 10,
+since 33 clocks is the floor for one pass, and the fixed pipeline fill and argmax scan become a
+bigger share of a short inference. That is Amdahl's law in hardware: at N = 32, 197 of the 249
+clocks are layer 1.
+
+### Area and Fmax (Quartus sweep)
+
+From the `quartus/` directory, in a Quartus command prompt:
+
+```
+quartus_sh -t sweep_n_mac.tcl          # compiles N = 1 2 4 8 16 32, a few minutes each
+python python/plot_sweep.py            # from the repo root: table + docs/n_mac_sweep.png
+```
+
+The script overrides `N_MAC` on the top level for each compile, pulls logic elements, registers,
+M9Ks, memory bits, 9-bit multiplier elements, Fmax and setup slack (slow 85C corner) out of the
+reports, and writes `results/n_mac_sweep.csv`. It removes the override at the end, so a GUI
+compile goes back to the default of 32 MACs.
+
+**Measured (Quartus II 14.1, EP4CE115F29C7, whole MNIST board design):**
+
+![Throughput vs area and Fmax vs N](docs/n_mac_sweep.png)
+
+| MACs | Cycles | Latency @ 50 MHz | Speedup | Logic elements | M9Ks | 9-bit mults | Fmax (slow 85C) | Inferences/s @ Fmax |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 6,644 | 132.9 µs | 1.0x | 1,497 | 24 | 2 | 87.9 MHz | 13,236 |
+| 2 | 3,328 | 66.6 µs | 2.0x | 1,570 | 24 | 4 | 82.8 MHz | 24,871 |
+| 4 | 1,686 | 33.7 µs | 3.9x | 1,792 | 24 | 8 | 83.2 MHz | 49,348 |
+| 8 | 865 | 17.3 µs | 7.7x | 2,202 | 23 | 16 | 82.8 MHz | 95,676 |
+| 16 | 446 | 8.9 µs | 14.9x | 2,895 | 23 | 32 | 81.0 MHz | 181,659 |
+| 32 | 249 | 5.0 µs | 26.7x | 4,362 | 23 | 64 | 77.2 MHz | 309,920 |
+
+What the numbers say:
+
+- **Speed is nearly free in area.** 32 MACs are 26.7x faster for 2.9x the logic elements, so
+  throughput per logic element goes up 9x (5.0 to 46.0 inferences/s per LE at 50 MHz). The
+  MAC datapath is mostly in the DSP blocks, and each lane adds only its 40-bit accumulator and
+  round/saturate logic (about 90 LEs per lane).
+- **Memory does not grow.** The same 106 kbit of weights is just stored wider, so the M9K count
+  stays at 23-24 (8 of them hold the demo images). What grows is bandwidth: at N = 32 the ROM
+  delivers 512 bits per clock, which the M9Ks provide by running side by side.
+- **Multipliers scale exactly with N** (two 9-bit elements = one 18x18 per MAC); 64 of 532 used.
+- **Fmax drops only 12%** (87.9 to 77.2 MHz), mostly from routing one activation to 32
+  multipliers and the wider result capture. Every size still has more than 7 ns of slack at 50 MHz.
+- **N = 1 on this core is faster than step 6's `nn_core`** (87.9 vs about 71.5 MHz), because the
+  argmax is a one-compare-per-clock scan here instead of a running max on the MAC output path.
+
+**On the board:** the MNIST project now builds with 32 MACs by default. Everything in the step 6
+table is the same except HEX7-4 with SW17 down, which should read `249`.
 
 ## Fitting the MAC on its own (optional)
 
@@ -393,6 +489,4 @@ This is useful for measuring the Fmax of the MAC alone.
 
 ## Ideas after MNIST
 
-- **Parallelism:** use N MACs, one per hidden neuron, reading N weights per clock from a wider
-  ROM. This is the classic latency and area trade-off to measure and write up.
 - **8-bit weights with a per-layer scale factor:** this is closer to how real INT8 accelerators work.
