@@ -12,7 +12,7 @@ verification in simulation, and then to hardware.
 | 4 | Full forward pass: .mif-initialized weight ROM, FSM sequencer, ReLU, board top level | done, 32/32 + board test pass |
 | 5 | Program the DE2-115 and verify XOR on LEDs / 7-segment | compiled: 313 LEs, 98.84 MHz |
 | 6 | MNIST: 196-32-10 on 14x14 digits, same `nn_core`, 16 test digits on the board | 1000/1000 bit-exact in sim, ready for the board |
-| 7 | Parallel MACs: N = 1-32 lanes, speed vs area sweep in Quartus | bit-exact in sim for every N (6644 -> 249 cycles), Quartus sweep pending |
+| 7 | Parallel MACs: N = 1-32 lanes, speed vs area sweep in Quartus | 26.7x faster for 2.9x the LEs, 77-88 MHz Fmax, board run pending |
 
 ## Layout
 
@@ -437,7 +437,33 @@ M9Ks, memory bits, 9-bit multiplier elements, Fmax and setup slack (slow 85C cor
 reports, and writes `results/n_mac_sweep.csv`. It removes the override at the end, so a GUI
 compile goes back to the default of 32 MACs.
 
-*Results pending: the table and plot go here after the sweep runs on the DE2-115 toolchain.*
+**Measured (Quartus II 14.1, EP4CE115F29C7, whole MNIST board design):**
+
+![Throughput vs area and Fmax vs N](docs/n_mac_sweep.png)
+
+| MACs | Cycles | Latency @ 50 MHz | Speedup | Logic elements | M9Ks | 9-bit mults | Fmax (slow 85C) | Inferences/s @ Fmax |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 6,644 | 132.9 µs | 1.0x | 1,497 | 24 | 2 | 87.9 MHz | 13,236 |
+| 2 | 3,328 | 66.6 µs | 2.0x | 1,570 | 24 | 4 | 82.8 MHz | 24,871 |
+| 4 | 1,686 | 33.7 µs | 3.9x | 1,792 | 24 | 8 | 83.2 MHz | 49,348 |
+| 8 | 865 | 17.3 µs | 7.7x | 2,202 | 23 | 16 | 82.8 MHz | 95,676 |
+| 16 | 446 | 8.9 µs | 14.9x | 2,895 | 23 | 32 | 81.0 MHz | 181,659 |
+| 32 | 249 | 5.0 µs | 26.7x | 4,362 | 23 | 64 | 77.2 MHz | 309,920 |
+
+What the numbers say:
+
+- **Speed is nearly free in area.** 32 MACs are 26.7x faster for 2.9x the logic elements, so
+  throughput per logic element goes up 9x (5.0 to 46.0 inferences/s per LE at 50 MHz). The
+  MAC datapath is mostly in the DSP blocks, and each lane adds only its 40-bit accumulator and
+  round/saturate logic (about 90 LEs per lane).
+- **Memory does not grow.** The same 106 kbit of weights is just stored wider, so the M9K count
+  stays at 23-24 (8 of them hold the demo images). What grows is bandwidth: at N = 32 the ROM
+  delivers 512 bits per clock, which the M9Ks provide by running side by side.
+- **Multipliers scale exactly with N** (two 9-bit elements = one 18x18 per MAC); 64 of 532 used.
+- **Fmax drops only 12%** (87.9 to 77.2 MHz), mostly from routing one activation to 32
+  multipliers and the wider result capture. Every size still has more than 7 ns of slack at 50 MHz.
+- **N = 1 on this core is faster than step 6's `nn_core`** (87.9 vs about 71.5 MHz), because the
+  argmax is a one-compare-per-clock scan here instead of a running max on the MAC output path.
 
 **On the board:** the MNIST project now builds with 32 MACs by default. Everything in the step 6
 table is the same except HEX7-4 with SW17 down, which should read `249`.
