@@ -3,7 +3,7 @@
 # Run from anywhere: sh sim/run_iverilog.sh
 set -e
 cd "$(dirname "$0")"
-RTL="../rtl/mac.v ../rtl/weight_rom.v ../rtl/nn_core.v ../rtl/nn_core_par.v ../rtl/hex7seg.v ../rtl/de2_115_top.v ../rtl/de2_115_mnist_top.v ../rtl/conv_pool.v"
+RTL="../rtl/mac.v ../rtl/weight_rom.v ../rtl/nn_core.v ../rtl/nn_core_par.v ../rtl/hex7seg.v ../rtl/de2_115_top.v ../rtl/de2_115_mnist_top.v ../rtl/conv_pool.v ../rtl/cnn_core.v"
 status=0
 
 # run <name> <testbench> [iverilog -P overrides...]
@@ -27,4 +27,6 @@ done
 for n in 1 32; do
     run tb_mnist_top$n tb_mnist_top -P tb_mnist_top.N_MAC=$n
 done
+# CNN: 200 images keeps CI quick (all 1000 pass: run -P tb_cnn.N_CASES=1000)
+run tb_cnn tb_cnn -P tb_cnn.N_CASES=200
 exit $status

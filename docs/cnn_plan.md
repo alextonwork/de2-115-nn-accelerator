@@ -18,8 +18,10 @@ Q8.8 costs at most 0.02 points for every candidate. The 16-channel net beats the
 MLP by ~1.9 points with fewer weights, at the same latency as the 8-channel one
 (the conv layer, not the channel count, sets the latency; see below).
 
-Plan: bring up with C = 8 (done on this branch), keep C a parameter, and ship C = 16
-as the headline number. It is a re-export plus `N_CH = 16`, no RTL change.
+Decision: C = 16 is the shipped network (brought up at C = 8 first; C stays a parameter).
+In RTL it gets 973/1000 on the first 1000 test images, bit-exact with Python, in
+**2037 clocks (40.7 us at 50 MHz)**: 3.3x faster than the single-MAC MLP and 1.9 points
+more accurate, with 26 MACs instead of 1.
 
 ## Network
 
@@ -37,7 +39,8 @@ RTL pools first and clamps once.
 ```
 image ROM --x_addr/x_data--> conv_pool (C lanes) --fm write--> feature RAM (36 x C words)
                                                                      |
-                                       dense_out (10 lanes) <--------+  -> logits -> argmax
+                                     dense (10 lanes) <--------------+  -> logits -> argmax
+                      \____________________ rtl/cnn_core.v ____________________/
 ```
 
 - `rtl/conv_pool.v` (done): lane l = output channel l. Each clock one pixel is broadcast to
@@ -46,13 +49,14 @@ image ROM --x_addr/x_data--> conv_pool (C lanes) --fm write--> feature RAM (36 x
   10 terms, so the 4 results of a window leave the MACs back to back and are max-reduced on
   the way out. One feature-map row (all C channels) is written per window.
   36 x 4 x 10 = **1440 clocks + 5 of pipeline = 1445**, no bubbles.
-- Feature RAM: 36 rows x C words, one M9K. Written a row at a time by `conv_pool`, read
-  one activation per clock by the dense layer (row k / C, channel k mod C).
-- `dense_out` (next): 10 lanes, one group, 36*C + 1 terms (~289 clocks at C = 8, ~577 at
-  C = 16), then the one-logit-per-clock argmax scan from `nn_core_par`.
-  Total ~1750 clocks (35 us at 50 MHz) at C = 8.
-- Multipliers: C (conv) + 10 (dense) MACs, about 36 9-bit multipliers at C = 8 and 52 at
-  C = 16, well inside the EP4CE115's 532. Weight ROM: 10 rows of C words (conv) plus
+- Feature RAM (in `rtl/cnn_core.v`): 36 rows x C words (9216 bits at C = 16; the 256-bit
+  row needs 8 M9Ks side by side). Written a row at a time by `conv_pool`, read one activation
+  per clock by the dense layer (row k / C, channel k mod C).
+- Dense layer (in `rtl/cnn_core.v`): 10 lanes, one group, 36*C + 1 terms (577 clocks at
+  C = 16) from a 577-row wide ROM read with the term counter, then the one-logit-per-clock
+  argmax scan from `nn_core_par`. Total **2037 clocks** at C = 16, measured by `tb_cnn`.
+- Multipliers: C (conv) + 10 (dense) MACs, 26 MACs = 52 9-bit multipliers at C = 16,
+  well inside the EP4CE115's 532. Weight ROM: 10 rows of C words (conv) plus
   10 x (36C + 1) words (dense).
 
 ### Why the conv layer is the bottleneck
@@ -69,13 +73,12 @@ N_MAC sweep from step 7.
 1. Done: `python/train_cnn.py` (numpy training + bit-exact Q8.8 golden model),
    `rtl/conv_pool.v`, `tb/tb_conv_pool.v` (16 board demo digits x 36 windows bit-exact,
    1445 clocks; fails on mutations of the max compare, the ReLU and the row addressing).
-2. Export the dense weights, add the feature RAM and `dense_out`, wrap them as `cnn_core.v`,
-   and check 1000 test images bit-exact (`tb_cnn`).
+2. Done: C = 16 export, `rtl/cnn_core.v` (feature RAM + dense + argmax), `tb/tb_cnn.v`:
+   1000/1000 test images bit-exact, 973 correct, 2037 clocks. CI runs 200 images to stay
+   quick. Mutations of the channel select, the bias input and the feature-RAM row address
+   all fail it.
 3. Board top `de2_115_cnn_top.v` (same switches/HEX layout as the MNIST top, latency on
    HEX7-4) and a Quartus project. Compile on the board for LEs, M9Ks, multipliers, Fmax.
 4. README: MLP vs CNN table (accuracy, weights, cycles, resources).
 5. Stretch: spatial parallelism (P positions per clock) and its sweep.
 
-Note: in the C = 8 export, channel 1 trained to all-zero taps and a small negative bias (a dead ReLU
-filter), so it outputs 0 everywhere. It costs nothing in accuracy terms; C = 16 or a
-different seed may avoid it.

@@ -4,7 +4,7 @@
 // bit for bit. Uses the board's image ROM file, so the pixels are the same
 // words the MNIST board top already stores.
 module tb_conv_pool;
-    parameter N_CH = 8;
+    parameter N_CH = 16;
     localparam DATA_W = 16;
     localparam N_IMG  = 16;
     localparam N_WIN  = 36;
@@ -22,13 +22,13 @@ module tb_conv_pool;
     weight_rom #(.DATA_W(16), .DEPTH(4096), .ADDR_W(12), .HEX_FILE("../weights/mnist_images.hex"))
     u_img (.clk(clk), .addr({img, x_addr}), .q(x_data));
 
-    conv_pool #(.N_CH(N_CH), .HEX_FILE("../weights/cnn_c8_conv.hex")) dut (
+    conv_pool #(.N_CH(N_CH), .HEX_FILE("../weights/cnn_c16_conv.hex")) dut (
         .clk(clk), .rst_n(rst_n), .start(start), .busy(busy), .done(done),
         .x_addr(x_addr), .x_data(x_data),
         .fm_we(fm_we), .fm_addr(fm_addr), .fm_wdata(fm_wdata));
 
     reg [N_CH*DATA_W-1:0] exp_mem [0:N_IMG*N_WIN-1];
-    initial $readmemh("../tb/vectors/cnn_c8_pool_exp.hex", exp_mem);
+    initial $readmemh("../tb/vectors/cnn_c16_pool_exp.hex", exp_mem);
 
     integer errors = 0, writes, i, cycles;
 

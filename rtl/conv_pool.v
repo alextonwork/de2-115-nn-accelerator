@@ -29,11 +29,11 @@
 //                   fm_addr = pr*6 + pc, lane 0 in the low DATA_W bits
 // ---------------------------------------------------------------------------
 module conv_pool #(
-    parameter N_CH     = 8,
+    parameter N_CH     = 16,
     parameter DATA_W   = 16,
     parameter FRAC_W   = 8,
     parameter ACC_W    = 40,
-    parameter HEX_FILE = "../weights/cnn_c8_conv.hex"
+    parameter HEX_FILE = "../weights/cnn_c16_conv.hex"
 ) (
     input  wire                     clk,
     input  wire                     rst_n,
