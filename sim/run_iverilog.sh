@@ -29,4 +29,5 @@ for n in 1 32; do
 done
 # CNN: 200 images keeps CI quick (all 1000 pass: run -P tb_cnn.N_CASES=1000)
 run tb_cnn tb_cnn -P tb_cnn.N_CASES=200
+run tb_cnn_top tb_mnist_top -P tb_mnist_top.USE_CNN=1
 exit $status

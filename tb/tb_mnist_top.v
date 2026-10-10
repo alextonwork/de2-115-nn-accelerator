@@ -5,18 +5,21 @@
 // image and checks what a person would see: HEX0 = the Python Q8.8 prediction,
 // HEX2 = the true label, LEDG[0]/LEDR[17] = right/wrong, LEDR[15:0] = the
 // per-image hit lamps, and HEX7-4 = latency (SW[17] down) / correct count (up).
-// Run with -P tb_mnist_top.N_MAC=<n> for each lane count.
+// Run with -P tb_mnist_top.N_MAC=<n> for each lane count, or
+// -P tb_mnist_top.USE_CNN=1 for the CNN version.
 // ---------------------------------------------------------------------------
 `timescale 1ns / 1ps
 
 module tb_mnist_top;
 
-    parameter N_MAC = 32;
+    parameter N_MAC   = 32;
+    parameter USE_CNN = 0;
 
     // latency formula from rtl/nn_core_par.v, for MNIST 196-32-10
     localparam G1      = 32 / N_MAC;
     localparam G2      = (10 + N_MAC - 1) / N_MAC;
-    localparam EXP_LAT = G1*197 + G2*33 + 9 + (10 - (G2-1)*N_MAC);
+    localparam EXP_LAT = USE_CNN ? 2037 :   // measured by tb/tb_cnn.v
+                         G1*197 + G2*33 + 9 + (10 - (G2-1)*N_MAC);
 
     reg CLOCK_50 = 1'b0;
     always #10 CLOCK_50 = ~CLOCK_50;
@@ -27,11 +30,12 @@ module tb_mnist_top;
     wire [17:0] LEDR;
     wire [6:0]  HEX0, HEX1, HEX2, HEX3, HEX4, HEX5, HEX6, HEX7;
 
-    de2_115_mnist_top #(.N_MAC(N_MAC)) dut (.CLOCK_50(CLOCK_50), .KEY(KEY), .SW(SW), .LEDG(LEDG), .LEDR(LEDR),
+    de2_115_mnist_top #(.N_MAC(N_MAC), .USE_CNN(USE_CNN)) dut (.CLOCK_50(CLOCK_50), .KEY(KEY), .SW(SW), .LEDG(LEDG), .LEDR(LEDR),
                            .HEX0(HEX0), .HEX1(HEX1), .HEX2(HEX2), .HEX3(HEX3),
                            .HEX4(HEX4), .HEX5(HEX5), .HEX6(HEX6), .HEX7(HEX7));
 
-    // Python's Q8.8 predictions for the 16 stored images (python/train_mnist.py)
+    // Python's Q8.8 predictions for the 16 stored images
+    // (python/train_mnist.py, or python/train_cnn.py for the CNN)
     reg [3:0] exp_pred [0:15];
     reg [3:0] label    [0:15];
 
@@ -63,7 +67,8 @@ module tb_mnist_top;
     reg ok;
 
     initial begin
-        $readmemh("../tb/vectors/mnist_demo_pred.hex", exp_pred);
+        if (USE_CNN) $readmemh("../tb/vectors/cnn_c16_demo_pred.hex", exp_pred);
+        else         $readmemh("../tb/vectors/mnist_demo_pred.hex", exp_pred);
         $readmemh("../weights/mnist_labels.hex", label);
         repeat (5) @(posedge CLOCK_50);
         KEY[0] = 1'b1;                                   // release reset

@@ -13,7 +13,7 @@ verification in simulation, and then to hardware.
 | 5 | Program the DE2-115 and verify XOR on LEDs / 7-segment | compiled: 313 LEs, 98.84 MHz |
 | 6 | MNIST: 196-32-10 on 14x14 digits, same `nn_core`, 16 test digits on the board | 1000/1000 bit-exact in sim, ready for the board |
 | 7 | Parallel MACs: N = 1-32 lanes, speed vs area sweep in Quartus | 26.7x faster for 2.9x the LEs, 77-88 MHz Fmax, board run pending |
-| 8 | CNN: 3x3 conv + 2x2 max-pool on the same 14x14 input ([plan](docs/cnn_plan.md)) | 98.02% Q8.8, 1000/1000 bit-exact in sim, 2037 clocks (3.3x faster than the 1-MAC MLP), board top next |
+| 8 | CNN: 3x3 conv + 2x2 max-pool on the same 14x14 input ([plan](docs/cnn_plan.md)) | 98.02% Q8.8, 1000/1000 bit-exact in sim, 2037 clocks (3.3x faster than the 1-MAC MLP), 16/16 demo digits, ready for the board |
 
 ## Layout
 
@@ -52,6 +52,7 @@ sim/run_modelsim.do        ModelSim script (takes the testbench name)
 sim/run_iverilog.sh        runs all testbenches with Icarus Verilog
 quartus/de2_115_top.*      ready-made Quartus project for the XOR board demo
 quartus/de2_115_mnist.*    ready-made Quartus project for the MNIST board demo
+quartus/de2_115_cnn.*      the same board demo running the CNN (USE_CNN = 1)
 quartus/sweep_n_mac.tcl    compiles the MNIST design for N_MAC = 1..32, writes results/n_mac_sweep.csv
 quartus/mac.sdc, mac_virtual_pins.tcl   for fitting the MAC on its own
 .github/workflows/sim.yml  CI: regenerates vectors and runs every testbench on each push

@@ -30,6 +30,7 @@ golden vectors for rtl/cnn_core.v:
   weights/cnn_c{C}_float.npz      float weights, for reference
   tb/vectors/cnn_c{C}_pool_exp.hex  pooled+ReLU feature map of the 16 board
                                   demo digits, 36 rows of C words per image
+  tb/vectors/cnn_c{C}_demo_pred.hex  its predictions for those 16 digits
   tb/vectors/cnn_c{C}_exp.hex     10 logits + pred for the first 1000 test
                                   images (pixels come from mnist_exp.hex)
   tb/vectors/cnn_vectors.vh       case count and Python's correct count
@@ -198,8 +199,12 @@ def export(p, q, xq_te, yte):
     write_rows(os.path.join(W_DIR, "cnn_c%d_conv.hex" % c), rows)
     np.savez(os.path.join(W_DIR, "cnn_c%d_float.npz" % c), **p)
     demo = pick_demo(yte)
-    _, pooled, _, _, _ = fixed_forward(q, xq_te[demo])
+    _, pooled, _, _, demo_pred = fixed_forward(q, xq_te[demo])
     write_rows(os.path.join(VEC_DIR, "cnn_c%d_pool_exp.hex" % c), pooled.reshape(-1, c))
+    with open(os.path.join(VEC_DIR, "cnn_c%d_demo_pred.hex" % c), "w") as f:
+        for v in demo_pred:
+            f.write("%X\n" % v)
+    print("demo digits: CNN predicts %d / %d correctly" % (int(np.sum(demo_pred == yte[demo])), len(demo)))
     assert "W1" not in q, "export supports conv -> pool -> dense(10) only"
     rows = [q["W2"][:, k] for k in range(q["W2"].shape[1])] + [q["b2"]]
     write_rows(os.path.join(W_DIR, "cnn_c%d_dense.hex" % c), rows)

@@ -77,8 +77,11 @@ N_MAC sweep from step 7.
    1000/1000 test images bit-exact, 973 correct, 2037 clocks. CI runs 200 images to stay
    quick. Mutations of the channel select, the bias input and the feature-RAM row address
    all fail it.
-3. Board top `de2_115_cnn_top.v` (same switches/HEX layout as the MNIST top, latency on
-   HEX7-4) and a Quartus project. Compile on the board for LEs, M9Ks, multipliers, Fmax.
+3. Done in sim: `de2_115_mnist_top` has `USE_CNN = 1`. Switches, HEX and LEDs work the same,
+   and HEX7-4 reads `2037`. The CNN gets all 16 stored digits right, including the messy 5
+   (test #8) that the MLP calls a 6. `tb_mnist_top -P USE_CNN=1` checks it.
+   Quartus project: `quartus/de2_115_cnn.qpf`. **Needs a board run** to measure LEs, M9Ks,
+   multipliers and Fmax.
 4. README: MLP vs CNN table (accuracy, weights, cycles, resources).
 5. Stretch: spatial parallelism (P positions per clock) and its sweep.
 
