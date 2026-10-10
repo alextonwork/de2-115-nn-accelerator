@@ -7,7 +7,7 @@ set_global_assignment -name DEVICE EP4CE115F29C7
 set_global_assignment -name TOP_LEVEL_ENTITY de2_115_mnist_top
 set_global_assignment -name VERILOG_FILE ../rtl/mac.v
 set_global_assignment -name VERILOG_FILE ../rtl/weight_rom.v
-set_global_assignment -name VERILOG_FILE ../rtl/nn_core.v
+set_global_assignment -name VERILOG_FILE ../rtl/nn_core_par.v
 set_global_assignment -name VERILOG_FILE ../rtl/hex7seg.v
 set_global_assignment -name VERILOG_FILE ../rtl/de2_115_mnist_top.v
 set_global_assignment -name SDC_FILE de2_115_top.sdc
