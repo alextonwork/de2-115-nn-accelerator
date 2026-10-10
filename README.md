@@ -13,6 +13,7 @@ verification in simulation, and then to hardware.
 | 5 | Program the DE2-115 and verify XOR on LEDs / 7-segment | compiled: 313 LEs, 98.84 MHz |
 | 6 | MNIST: 196-32-10 on 14x14 digits, same `nn_core`, 16 test digits on the board | 1000/1000 bit-exact in sim, ready for the board |
 | 7 | Parallel MACs: N = 1-32 lanes, speed vs area sweep in Quartus | 26.7x faster for 2.9x the LEs, 77-88 MHz Fmax, board run pending |
+| 8 | CNN: 3x3 conv + 2x2 max-pool on the same 14x14 input ([plan](docs/cnn_plan.md)) | conv + pool RTL bit-exact in sim, dense layer next |
 
 ## Layout
 
@@ -24,6 +25,7 @@ python/gen_nn_vectors.py   expected hidden/logit/class for the forward-pass test
 python/train_mnist.py      MNIST: train 196-32-10, quantize, measure accuracy, export ROMs + vectors
 python/gen_par_weights.py  re-pack the MNIST weights into one wide ROM per MAC count
 python/plot_sweep.py       speed-vs-area plot + README table from the Quartus sweep CSV
+python/train_cnn.py        CNN: train conv 3x3 + max-pool + dense, Q8.8 golden model, export conv ROM + vectors
 weights/xor_weights.mif    Quartus memory init file (17 x 16-bit words)
 weights/xor_weights.hex    same contents for $readmemh (this is what the ROM loads)
 weights/mnist_*.hex/.mif   MNIST weights (6634 words), 16 demo images, their labels
@@ -32,6 +34,7 @@ rtl/mac.v                  parameterized 2-stage pipelined multiply-accumulate u
 rtl/weight_rom.v           M9K ROM, initialized with $readmemh (simulation and Quartus)
 rtl/nn_core.v              2-layer MLP forward pass: FSM + ROM + one MAC
 rtl/nn_core_par.v          the same forward pass on N_MAC parallel MACs (MNIST board top uses this)
+rtl/conv_pool.v            3x3 conv + ReLU + 2x2 max-pool on N_CH parallel MACs (CNN first layer)
 rtl/hex7seg.v              7-segment decoder
 rtl/de2_115_top.v          XOR board top level: switches in, LEDs + 7-segment out
 rtl/de2_115_mnist_top.v    MNIST board top level: image ROM, SW selects a digit, HEX shows result
@@ -41,6 +44,7 @@ tb/tb_top.v                board-level test (switches -> LEDs / HEX digits)
 tb/tb_mnist.v              MNIST forward pass on 1000 test images vs Python, bit for bit
 tb/tb_mnist_par.v          nn_core_par vs Python, bit for bit, for any N_MAC
 tb/tb_mnist_top.v          MNIST board-level test (all 16 stored digits)
+tb/tb_conv_pool.v          conv_pool vs Python on the 16 demo digits, bit for bit
 tb/vectors/                generated stimulus / expected results
 sim/run_modelsim.do        ModelSim script (takes the testbench name)
 sim/run_iverilog.sh        runs all testbenches with Icarus Verilog
