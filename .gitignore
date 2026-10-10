@@ -7,3 +7,4 @@ quartus/db/
 quartus/incremental_db/
 quartus/output_files/
 __pycache__/
+sim/*.log
