@@ -11,6 +11,10 @@
 // N_MAC picks the number of MACs (1, 2, 4, 8, 16 or 32) and the matching
 // wide weight ROM. quartus/sweep_n_mac.tcl compiles every value in turn.
 //
+// USE_CNN = 1 swaps the MLP for rtl/cnn_core.v (conv 3x3x16 + max-pool +
+// dense, 2037 clocks); everything else, including the displays, stays the
+// same. quartus/de2_115_cnn.qsf builds that version.
+//
 //   KEY[0]      reset (press to reset)
 //   SW[3:0]     which stored digit to show (0-15)
 //   SW[17]      HEX7-4 mode: down = latency in clock cycles, up = how many of
@@ -27,6 +31,7 @@
 // ---------------------------------------------------------------------------
 module de2_115_mnist_top #(
     parameter N_MAC       = 32,
+    parameter USE_CNN     = 0,    // 1: rtl/cnn_core.v instead of nn_core_par
     parameter WEIGHT_FILE = "",   // default: ../weights/mnist_weights_par<NN>.hex
     parameter IMAGE_FILE  = "../weights/mnist_images.hex",
     parameter LABEL_FILE  = "../weights/mnist_labels.hex"
@@ -91,13 +96,23 @@ module de2_115_mnist_top #(
                        (N_MAC == 16) ? "../weights/mnist_weights_par16.hex" :
                                        "../weights/mnist_weights_par32.hex";
 
-    nn_core_par #(.N_IN(N_IN), .N_HID(N_HID), .N_OUT(N_OUT), .N_MAC(N_MAC),
-                  .HEX_FILE(WFILE)) u_core (
-        .clk(clk), .rst_n(rst_n),
-        .start(start), .x_addr(x_addr), .x_data(x_data),
-        .busy(busy), .done(done),
-        .hidden_flat(hidden_flat), .logits_flat(logits_flat), .pred(pred)
-    );
+    generate if (USE_CNN) begin : g_cnn
+        assign hidden_flat = {N_HID*DATA_W{1'b0}};
+        cnn_core u_core (
+            .clk(clk), .rst_n(rst_n),
+            .start(start), .x_addr(x_addr), .x_data(x_data),
+            .busy(busy), .done(done),
+            .logits_flat(logits_flat), .pred(pred)
+        );
+    end else begin : g_mlp
+        nn_core_par #(.N_IN(N_IN), .N_HID(N_HID), .N_OUT(N_OUT), .N_MAC(N_MAC),
+                      .HEX_FILE(WFILE)) u_core (
+            .clk(clk), .rst_n(rst_n),
+            .start(start), .x_addr(x_addr), .x_data(x_data),
+            .busy(busy), .done(done),
+            .hidden_flat(hidden_flat), .logits_flat(logits_flat), .pred(pred)
+        );
+    end endgenerate
 
     // ---------------- round-robin over the stored images ----------------
     reg [3:0]       pred_mem [0:N_IMG-1];
