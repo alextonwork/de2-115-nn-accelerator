@@ -1,13 +1,15 @@
-# Quartus project settings for the DE2-115 XOR accelerator.
-# Open quartus/de2_115_top.qpf in Quartus; everything below is already set.
+# Quartus project settings for the DE2-115 MNIST digit classifier.
+# Open quartus/de2_115_mnist.qpf in Quartus; everything below is already set.
+# Weights, images and labels are loaded by $readmemh from ../weights/*.hex
+# (see rtl/weight_rom.v); the .mif files are the annotated copies.
 set_global_assignment -name FAMILY "Cyclone IV E"
 set_global_assignment -name DEVICE EP4CE115F29C7
-set_global_assignment -name TOP_LEVEL_ENTITY de2_115_top
+set_global_assignment -name TOP_LEVEL_ENTITY de2_115_mnist_top
 set_global_assignment -name VERILOG_FILE ../rtl/mac.v
 set_global_assignment -name VERILOG_FILE ../rtl/weight_rom.v
 set_global_assignment -name VERILOG_FILE ../rtl/nn_core.v
 set_global_assignment -name VERILOG_FILE ../rtl/hex7seg.v
-set_global_assignment -name VERILOG_FILE ../rtl/de2_115_top.v
+set_global_assignment -name VERILOG_FILE ../rtl/de2_115_mnist_top.v
 set_global_assignment -name SDC_FILE de2_115_top.sdc
 set_global_assignment -name EDA_SIMULATION_TOOL "ModelSim-Altera (Verilog)"
 set_global_assignment -name RESERVE_ALL_UNUSED_PINS_WEAK_PULLUP "AS INPUT TRI-STATED"

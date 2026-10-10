@@ -78,10 +78,11 @@ def write_mif(path, words, comments):
 
 
 def write_hex(path, words, comments):
-    # $readmemh format; // comments are legal in readmem files
+    # $readmemh format, one word per line. Quartus loads this file too, so it
+    # carries no comments; the .mif has the annotated copy.
     with open(path, "w") as f:
-        for w, c in zip(words, comments):
-            f.write("%04X  // %s\n" % (to_unsigned(w, DATA_W), c))
+        for w in words:
+            f.write("%04X\n" % to_unsigned(w, DATA_W))
 
 
 def main():

@@ -4,11 +4,13 @@
 #   do run_modelsim.do              ;# MAC unit testbench (default)
 #   do run_modelsim.do tb_nn_core   ;# full forward pass
 #   do run_modelsim.do tb_top       ;# board top level
+#   do run_modelsim.do tb_mnist     ;# MNIST forward pass, 1000 test images
+#   do run_modelsim.do tb_mnist_top ;# MNIST board top level
 if {$argc > 0} { set TB $1 } else { set TB tb_mac }
 
 if {[file exists work]} { vdel -lib work -all }
 vlib work
-vlog -work work ../rtl/mac.v ../rtl/weight_rom.v ../rtl/nn_core.v ../rtl/hex7seg.v ../rtl/de2_115_top.v
+vlog -work work ../rtl/mac.v ../rtl/weight_rom.v ../rtl/nn_core.v ../rtl/hex7seg.v ../rtl/de2_115_top.v ../rtl/de2_115_mnist_top.v
 vlog -work work +incdir+../tb/vectors ../tb/$TB.v
 vsim -voptargs=+acc work.$TB
 
@@ -33,6 +35,21 @@ if {$TB == "tb_mac"} {
     add wave -divider results
     add wave -radix decimal sim:/tb_nn_core/dut/hidden sim:/tb_nn_core/dut/logit
     add wave sim:/tb_nn_core/pred
+} elseif {$TB == "tb_mnist"} {
+    add wave sim:/tb_mnist/clk sim:/tb_mnist/start sim:/tb_mnist/busy sim:/tb_mnist/done
+    add wave -divider fsm
+    add wave sim:/tb_mnist/dut/state sim:/tb_mnist/dut/layer
+    add wave -radix unsigned sim:/tb_mnist/dut/neuron sim:/tb_mnist/dut/k sim:/tb_mnist/dut/rom_addr
+    add wave -divider mac
+    add wave -radix unsigned sim:/tb_mnist/x_addr
+    add wave -radix decimal sim:/tb_mnist/dut/weight sim:/tb_mnist/dut/mac_b sim:/tb_mnist/dut/mac_result
+    add wave -divider results
+    add wave -radix decimal sim:/tb_mnist/dut/logit
+    add wave -radix unsigned sim:/tb_mnist/pred
+} elseif {$TB == "tb_mnist_top"} {
+    add wave sim:/tb_mnist_top/KEY sim:/tb_mnist_top/SW sim:/tb_mnist_top/LEDG sim:/tb_mnist_top/LEDR
+    add wave -radix unsigned sim:/tb_mnist_top/dut/cur_img sim:/tb_mnist_top/dut/pred sim:/tb_mnist_top/dut/latency
+    add wave sim:/tb_mnist_top/HEX0 sim:/tb_mnist_top/HEX2
 } else {
     add wave sim:/tb_top/KEY sim:/tb_top/SW sim:/tb_top/LEDG sim:/tb_top/HEX0 sim:/tb_top/HEX6
     add wave -radix hex sim:/tb_top/dut/logit
